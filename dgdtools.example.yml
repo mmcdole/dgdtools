@@ -1,19 +1,22 @@
-# dgdtools.yml — shared configuration for dgdfmt and dgdlint.
-# Place at your project root; every field is optional. Values shown are
-# examples for a classic DGD mudlib.
+# dgdtools.yml -- shared configuration for dgdfmt and dgdlint.
+# Place at your project root; every field is optional. The values below
+# are a real working setup for a classic DGD mudlib (VikingMUD) and form
+# a reasonable starting point for any DGD lib.
 
 dialect:
   slash_slash: true          # // comments (DGD SLASHSLASH build flag)
   closures: false            # `function` keyword (DGD CLOSURES build flag)
 
-root: .                      # filesystem dir that is the lib's "/"
+root: lib                    # filesystem directory that is the lib's "/"
 
 exclude:
-  - "players/**"
+  - "attic/**"               # retired code kept for reference
   - "**/old/**"
   - "**/OLD/**"
+  - "**/.old/**"
+  - "**/*.pre*"              # foo.preWizname.c-style parked copies
   - "**/*.retired"
-  - "**/*.pre*"
+  - "**/var/**"              # generated runtime data (maps, save state)
 
 format:
   indent: 4
@@ -22,40 +25,44 @@ format:
   function_headers: split    # split (KNF: name at column 0) | joined
 
 lint:
-  # Mirror the driver config so #include and inherit macros resolve.
+  # Mirror the driver config (include dirs, forced include, auto object)
+  # so #include and inherit macros resolve.
   include_dirs: ["/dgd/include", "/std/include"]
-  include_file: "/dgd/include/Std.h"   # force-included everywhere
-  auto_objects: ["/dgd/lib/object"]    # implicitly inherited by everything
+  include_file: "/dgd/include/Std.h"
+  auto_objects: ["/dgd/lib/object"]
 
   # Identifiers accepted in specifier position (empty visibility macros).
   specifier_macros: [public]
 
-  # Functions whose string argument names a callback on this_object().
-  # call_other and call_out are built in; value = 0-based argument index.
+  # Functions whose string argument names a callback on this_object();
+  # call_other and call_out are built in. Value = 0-based argument index.
   call_registry:
     store_fp: 0
     add_action: 0
-
-  # Function/macro names that mark an object as auto-saving.
-  autosave_markers: [set_auto_save]
 
   # Functions taking a literal object path (clone_object, compile_object,
   # find_object are built in); value = 0-based argument index.
   object_registry: {}
 
+  # scanf/printf-style functions and their format-string argument index;
+  # sscanf (arg 1) is built in.
+  format_registry: {}
+
+  # Function/macro names marking an object as auto-saving.
+  autosave_markers: [set_auto_save, D_STORE]
+
   # Lib-path globs served by virtual-object daemons (objects with no
   # backing .c file). Generated-data directories are usually better
-  # handled with an exclude (e.g. "**/var/**").
+  # handled with an exclude such as "**/var/**".
   virtual_paths: []
 
   # Rules run by their built-in defaults (see `dgdlint -rules`); enable
   # adds to the defaults, disable removes. The rules: section below only
-  # TUNES a rule's settings — listing one there does not enable it.
-  enable: []                 # e.g. [raw-inherit-path, missing-visibility]
+  # tunes a rule's settings; listing one there does not enable it.
+  enable: []
   disable: []
   rules:
     raw-inherit-path: { severity: warning, deny: ["/std/", "/obj/"] }
-    callable-not-found: { severity: error }
     lifecycle-chain: { names: [create] }
   path_rules:
     - paths: ["legacy/**"]

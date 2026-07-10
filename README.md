@@ -56,8 +56,9 @@ dialect:
 root: lib                    # filesystem directory that is the lib's "/"
 
 exclude:                     # glob patterns, ** crosses directories
-  - "players/**"
+  - "attic/**"               # retired code kept for reference
   - "**/old/**"
+  - "**/*.pre*"              # parked file copies
   - "**/*.retired"
   - "**/var/**"              # generated runtime data
 
@@ -91,7 +92,7 @@ lint:
   format_registry: {}
 
   # Function/macro names marking an object as auto-saving.
-  autosave_markers: [set_auto_save]
+  autosave_markers: [set_auto_save, D_STORE]
 
   # Lib-path globs served by virtual-object daemons (no backing .c file).
   virtual_paths: []
@@ -109,9 +110,18 @@ lint:
   fail_on: error             # exit 1 at this severity or above
 ```
 
-The `root`, `include_dirs`, `include_file`, and `auto_objects` values
-mirror the DGD driver configuration. Without them the tier-2 lint rules
-cannot resolve inherit chains and stay quiet rather than guess.
+### Lint settings
+
+| Setting | Purpose |
+|---|---|
+| `include_dirs`, `include_file`, `auto_objects` | Copies of the same values in the DGD driver config: where `#include <...>` searches, the header force-included into every compile, and the object every program implicitly inherits. Without them, inherit macros do not resolve and the tier-2 rules stay quiet rather than guess. |
+| `specifier_macros` | Identifiers accepted as visibility specifiers. `public` is not a DGD keyword; libs define it as an empty macro (`#define public`) so headers read `public void create()`. dgdtools works on unpreprocessed source, so it must be told which identifiers play this role. |
+| `call_registry` | Mudlib functions whose string argument names a callback on `this_object()`, e.g. `add_action("do_pull", "pull")`. Feeds `callable-not-found` and friends; `call_other` and `call_out` are built in. |
+| `object_registry` | Mudlib functions whose string argument is an object path. Feeds `target-object-missing`; `clone_object`, `compile_object`, and `find_object` are built in. |
+| `format_registry` | scanf/printf-style functions and the position of their format string. Feeds `sscanf-format`; `sscanf` is built in. |
+| `autosave_markers` | Function or macro names whose presence marks an object as persisting via `save_object`. Feeds `static-autosave-var`. |
+| `virtual_paths` | Lib-path globs served by virtual-object daemons, i.e. objects that exist without a `.c` file. Exempts them from `target-object-missing`. |
+| `rules`, `path_rules`, `enable`, `disable`, `fail_on` | Rule control: defaults per `dgdlint -rules`, `enable`/`disable` adjust the set, `rules:` tunes severity and per-rule options, `path_rules` disables rules under matching paths, `fail_on` sets the exit-1 threshold. |
 
 ## dgdfmt
 
