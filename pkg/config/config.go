@@ -38,6 +38,9 @@ type Format struct {
 	Indent        int    `yaml:"indent"`
 	LineEndings   string `yaml:"line_endings"` // preserve | lf | crlf
 	MaxBlankLines int    `yaml:"max_blank_lines"`
+	// FunctionHeaders: "split" (KNF: name at column 0, the default) or
+	// "joined" (whole header on one line; brace still on its own line).
+	FunctionHeaders string `yaml:"function_headers"`
 }
 
 type Lint struct {

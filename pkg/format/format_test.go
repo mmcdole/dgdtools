@@ -49,6 +49,31 @@ func TestKNFHeaders(t *testing.T) {
 	assert.Contains(t, out, "static void /* ctor */ create() {")
 }
 
+func TestOneLinersPreserved(t *testing.T) {
+	// A definition written on one line stays on one line (the accessor
+	// idiom) — only its spacing is normalized. Like gofmt.
+	in := "string query_key_code() { return key_code; }\nvoid   set_key_code(string c) { key_code=c; }\n"
+	want := "string query_key_code() { return key_code; }\nvoid set_key_code(string c) { key_code = c; }\n"
+	assert.Equal(t, want, fmtSrc(t, in, Options{}))
+
+	// Idempotent, and multi-line definitions still explode to KNF.
+	assert.Equal(t, want, fmtSrc(t, want, Options{}))
+	in = "string query_key_code() { return key_code;\n}\n"
+	want = "string\nquery_key_code()\n{\n    return key_code;\n}\n"
+	assert.Equal(t, want, fmtSrc(t, in, Options{}))
+}
+
+func TestJoinedHeaders(t *testing.T) {
+	o := Options{FuncHeaders: HeadersJoined}
+	in := "static void\ncreate() {\n::create();\n}\n"
+	want := "static void create()\n{\n    ::create();\n}\n"
+	assert.Equal(t, want, fmtSrc(t, in, o))
+	// Fixed point, and one-liners still survive.
+	assert.Equal(t, want, fmtSrc(t, want, o))
+	one := "string query_key_code() { return key_code; }\n"
+	assert.Equal(t, one, fmtSrc(t, one, o))
+}
+
 func TestControlFlowCuddling(t *testing.T) {
 	in := "void\nf()\n{\n    if (x)\n    {\n        y = 1;\n    }\n    else\n    {\n        y = 2;\n    }\n}\n"
 	want := "void\nf()\n{\n    if (x) {\n        y = 1;\n    } else {\n        y = 2;\n    }\n}\n"

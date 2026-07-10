@@ -182,6 +182,9 @@ var unformatted = &lint.Analyzer{
 		case "crlf":
 			opts.LineEndings = format.CRLF
 		}
+		if p.Config.Format.FunctionHeaders == "joined" {
+			opts.FuncHeaders = format.HeadersJoined
+		}
 		out, err := format.Format(p.File, opts)
 		if err != nil {
 			return // unlexable files are dgdfmt's problem, not a finding

@@ -1,7 +1,10 @@
 // dgdfmt formats DGD LPC source, gofmt-style.
 //
 // Without -l/-d/-w it prints the formatted source of each named file (or
-// stdin) to stdout. Directories are walked for .c and .h files.
+// stdin) to stdout. Directories are walked for .c and .h files, honoring
+// the excludes from dgdtools.yml (found by searching upward from the
+// working directory, or via -config). The config also supplies dialect
+// and format defaults; explicitly passed flags win.
 //
 // Every write is protected by the formatter's internal gate: the output is
 // re-lexed and its significant token stream must be identical to the
@@ -15,11 +18,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"os/exec"
-	"path/filepath"
 
+	"github.com/mmcdole/dgdtools/pkg/config"
+	"github.com/mmcdole/dgdtools/pkg/fileset"
 	"github.com/mmcdole/dgdtools/pkg/format"
 	"github.com/mmcdole/dgdtools/pkg/lexer"
 )
@@ -30,9 +33,11 @@ var (
 	list        = flag.Bool("l", false, "list files whose formatting differs")
 	diff        = flag.Bool("d", false, "display diffs instead of rewriting files")
 	write       = flag.Bool("w", false, "write result to (source) file instead of stdout")
+	configPath  = flag.String("config", "", "path to dgdtools.yml (default: search upward)")
 	indent      = flag.Int("indent", 4, "spaces per indentation level")
 	lineEndings = flag.String("line-endings", "preserve", "newline policy: preserve, lf, or crlf")
 	maxBlank    = flag.Int("max-blank-lines", 2, "maximum consecutive blank lines")
+	funcHeaders = flag.String("func-headers", "split", "function header layout: split (KNF, name at column 0) or joined (one line)")
 	noSlash     = flag.Bool("no-slash-slash", false, "disable // line comments (DGD without SLASHSLASH)")
 	closures    = flag.Bool("closures", false, "reserve 'function' as a keyword (DGD with CLOSURES)")
 	showVersion = flag.Bool("version", false, "print version")
@@ -52,21 +57,22 @@ func main() {
 		return
 	}
 
-	opts, dialect, err := options()
+	cfg, err := loadConfig()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "dgdfmt:", err)
-		os.Exit(2)
+		fatal(err)
+	}
+	opts, dialect, err := options(cfg)
+	if err != nil {
+		fatal(err)
 	}
 
 	if flag.NArg() == 0 {
 		if *write {
-			fmt.Fprintln(os.Stderr, "dgdfmt: cannot use -w with standard input")
-			os.Exit(2)
+			fatal(fmt.Errorf("cannot use -w with standard input"))
 		}
 		src, err := io.ReadAll(os.Stdin)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "dgdfmt:", err)
-			os.Exit(2)
+			fatal(err)
 		}
 		processBytes("<stdin>", src, opts, dialect)
 		os.Exit(exitCode)
@@ -78,19 +84,12 @@ func main() {
 		case err != nil:
 			report(err)
 		case info.IsDir():
-			filepath.WalkDir(arg, func(path string, d fs.DirEntry, err error) error {
-				if err != nil {
-					report(err)
-					return nil
-				}
-				if d.IsDir() {
-					return nil
-				}
-				if ext := filepath.Ext(path); ext == ".c" || ext == ".h" {
-					processFile(path, opts, dialect)
-				}
-				return nil
+			err := fileset.Walk(arg, cfg.Exclude, func(path, rel string) {
+				processFile(path, opts, dialect)
 			})
+			if err != nil {
+				report(err)
+			}
 		default:
 			processFile(arg, opts, dialect)
 		}
@@ -98,9 +97,45 @@ func main() {
 	os.Exit(exitCode)
 }
 
-func options() (format.Options, lexer.Dialect, error) {
+func loadConfig() (*config.Config, error) {
+	if *configPath != "" {
+		return config.Load(*configPath)
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	return config.Find(wd)
+}
+
+// options merges config-file format settings with flags; flags that were
+// explicitly passed on the command line win.
+func options(cfg *config.Config) (format.Options, lexer.Dialect, error) {
+	set := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) { set[f.Name] = true })
+
 	o := format.Options{Indent: *indent, MaxBlankLines: *maxBlank}
-	switch *lineEndings {
+	le := *lineEndings
+	fh := *funcHeaders
+	dialect := lexer.Dialect{SlashSlash: !*noSlash, Closures: *closures}
+
+	if !set["indent"] && cfg.Format.Indent > 0 {
+		o.Indent = cfg.Format.Indent
+	}
+	if !set["max-blank-lines"] && cfg.Format.MaxBlankLines > 0 {
+		o.MaxBlankLines = cfg.Format.MaxBlankLines
+	}
+	if !set["line-endings"] && cfg.Format.LineEndings != "" {
+		le = cfg.Format.LineEndings
+	}
+	if !set["func-headers"] && cfg.Format.FunctionHeaders != "" {
+		fh = cfg.Format.FunctionHeaders
+	}
+	if !set["no-slash-slash"] && !set["closures"] {
+		dialect = cfg.TokenDialect()
+	}
+
+	switch le {
 	case "preserve":
 		o.LineEndings = format.Preserve
 	case "lf":
@@ -108,9 +143,22 @@ func options() (format.Options, lexer.Dialect, error) {
 	case "crlf":
 		o.LineEndings = format.CRLF
 	default:
-		return o, lexer.Dialect{}, fmt.Errorf("invalid -line-endings %q", *lineEndings)
+		return o, dialect, fmt.Errorf("invalid line-endings %q", le)
 	}
-	return o, lexer.Dialect{SlashSlash: !*noSlash, Closures: *closures}, nil
+	switch fh {
+	case "split":
+		o.FuncHeaders = format.HeadersSplit
+	case "joined":
+		o.FuncHeaders = format.HeadersJoined
+	default:
+		return o, dialect, fmt.Errorf("invalid func-headers %q (want split or joined)", fh)
+	}
+	return o, dialect, nil
+}
+
+func fatal(err error) {
+	fmt.Fprintln(os.Stderr, "dgdfmt:", err)
+	os.Exit(2)
 }
 
 func report(err error) {

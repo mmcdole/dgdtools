@@ -19,6 +19,7 @@ format:
   indent: 4
   line_endings: preserve     # preserve | lf | crlf
   max_blank_lines: 2
+  function_headers: split    # split (KNF: name at column 0) | joined
 
 lint:
   # Mirror the driver config so #include and inherit macros resolve.

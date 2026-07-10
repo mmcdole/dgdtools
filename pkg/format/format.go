@@ -37,6 +37,18 @@ const (
 	CRLF                        // normalize to \r\n
 )
 
+// HeaderStyle selects function-definition header layout.
+type HeaderStyle int
+
+const (
+	// HeadersSplit is KNF: specifiers and return type on one line, the
+	// function name at column 0, the brace on its own line.
+	HeadersSplit HeaderStyle = iota
+	// HeadersJoined keeps the whole header on one line; the brace still
+	// gets its own line.
+	HeadersJoined
+)
+
 // Options carries the formatter's (deliberately few) toggles. The dialect
 // is not an option here: Format always relexes its output under the same
 // dialect the input File was lexed with.
@@ -44,6 +56,7 @@ type Options struct {
 	Indent        int // spaces per level; 0 means the default 4
 	LineEndings   LineEndings
 	MaxBlankLines int // max consecutive blank lines; 0 means the default 2
+	FuncHeaders   HeaderStyle
 }
 
 func (o Options) indent() int {
@@ -99,7 +112,7 @@ func engine(f *token.File, o Options) []byte {
 		f:          f,
 		o:          o,
 		nl:         dominantNewline(f),
-		plan:       buildPlan(f),
+		plan:       buildPlan(f, o),
 		prevSigIdx: -1,
 	}
 	p.run()
@@ -127,13 +140,15 @@ func dominantNewline(f *token.File) []byte {
 // Keys are token indexes. Only headers free of comments get plan entries.
 type plan struct {
 	breakBefore map[int]bool // exactly one newline before this token
+	breakAfter  map[int]bool // exactly one newline after this token
 	joinBefore  map[int]bool // exactly one space before this token
 	bodyBrace   map[int]bool // function-body '{' (exempt from cuddling)
 }
 
-func buildPlan(f *token.File) plan {
+func buildPlan(f *token.File, o Options) plan {
 	pl := plan{
 		breakBefore: map[int]bool{},
+		breakAfter:  map[int]bool{},
 		joinBefore:  map[int]bool{},
 		bodyBrace:   map[int]bool{},
 	}
@@ -149,22 +164,42 @@ func buildPlan(f *token.File) plan {
 		if it.HeaderComments {
 			continue
 		}
+		// A definition written entirely on one line is a deliberate
+		// vertical decision (the accessor idiom); preserve it, like gofmt
+		// preserves single-line functions. KNF explosion applies only to
+		// definitions that are already multi-line.
+		if it.Kind == structure.FuncDef && !spanHasNewline(f, it.First, it.BodyR) {
+			continue
+		}
 		hdr := append(append([]int{}, it.SpecIdxs...), it.TypeIdxs...)
 		for _, idx := range hdr[min(1, len(hdr)):] {
 			pl.joinBefore[idx] = true
 		}
 		if len(hdr) > 0 {
-			if it.Kind == structure.FuncDef {
+			if it.Kind == structure.FuncDef && o.FuncHeaders == HeadersSplit {
 				pl.breakBefore[it.NameIdx] = true // name at column 0
 			} else {
-				pl.joinBefore[it.NameIdx] = true // prototypes stay one line
+				pl.joinBefore[it.NameIdx] = true // one-line header
 			}
 		}
 		if it.Kind == structure.FuncDef {
 			pl.breakBefore[it.BodyL] = true // brace on its own line
+			pl.breakAfter[it.BodyL] = true  // body starts on the next line
+			pl.breakBefore[it.BodyR] = true // closing brace on its own line
 		}
 	}
 	return pl
+}
+
+// spanHasNewline reports whether any newline trivia lies between token
+// indexes a and b.
+func spanHasNewline(f *token.File, a, b int) bool {
+	for i := a; i <= b && i < len(f.Tokens); i++ {
+		if f.Tokens[i].Kind == token.Newline {
+			return true
+		}
+	}
+	return false
 }
 
 // frame is one open bracket on the printer's stack.
@@ -241,7 +276,7 @@ func (p *printer) renderGap(gap []token.Token, next token.Token) {
 			p.buf.WriteByte(' ')
 			return
 		}
-		if p.plan.breakBefore[nextIdx] {
+		if p.plan.breakBefore[nextIdx] || p.plan.breakAfter[p.prevSigIdx] {
 			p.writeNewline(nil)
 			p.writeIndent(next)
 			return
