@@ -89,13 +89,15 @@ func TestTier2SeededBugs(t *testing.T) {
 	// Compiler-blindspot rules (vet.c fixture).
 	assert.Contains(t, got, "include-not-found vet.c:1")
 	assert.Contains(t, got, "assignment-in-condition vet.c:12", "if (x = 1)")
-	assert.Contains(t, got, "assignment-in-condition vet.c:16", "for middle clause")
+	assert.Contains(t, got, "assignment-in-condition vet.c:16", "precedence class in for middle clause")
 	assert.Contains(t, got, "no-effect-statement vet.c:18", "x == 1;")
 	assert.Contains(t, got, "sscanf-format vet.c:19", "1 conversion, 2 variables")
 	assert.Contains(t, got, "callback-arity vet.c:21", "too few via ->")
 	assert.Contains(t, got, "callback-arity vet.c:22", "too many via call_out")
 	for _, k := range got {
 		assert.NotContains(t, k, "vet.c:14", "((x = 1)) idiom is accepted")
+		assert.NotContains(t, k, "vet.c:25", "assign-and-test idiom is accepted")
+		assert.NotContains(t, k, "mixinuser.c", "no parent create: nothing to chain")
 		assert.NotContains(t, k, "vet.c:20", "%% is not a conversion")
 		assert.NotContains(t, k, "vet.c:23", "correct arity")
 		assert.NotContains(t, k, "vet.c:24", "ellipsis accepts extras")

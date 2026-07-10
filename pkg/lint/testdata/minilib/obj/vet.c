@@ -13,7 +13,7 @@ create()
         n = 2;
     if ((x = 1))
         n = 3;
-    for (x = 0; x = n; x++)
+    for (x = 0; x = sizeof(s) && n; x++)
         s = "hi";
     x == 1;
     n = sscanf(s, "%d", a, b);
@@ -22,4 +22,5 @@ create()
     call_out("takes_two", 5, 1, 2, 3);
     call_out("takes_two", 5, 1, 2);
     this_object()->flex(1, 2, 3, 4);
+    if (x = sizeof(s)) n = 5;
 }

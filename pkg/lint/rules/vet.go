@@ -79,9 +79,10 @@ func sigTokens(p *lint.Pass) []int {
 
 var assignInCondition = &lint.Analyzer{
 	Name: "assignment-in-condition",
-	Doc: "a bare assignment inside an if/while/for condition — almost " +
-		"always a typo for ==; wrap in an extra pair of parentheses to " +
-		"state that the assignment is intended",
+	Doc: "a suspicious assignment inside an if/while/for condition: " +
+		"assigning a bare literal (a typo for ==) or mixing assignment " +
+		"with && or || (`=` binds last, so the variable gets the boolean). " +
+		"The assign-and-test idiom `if (sz = sizeof(x))` is accepted",
 	Tier: 1, Default: true, DefaultSeverity: diag.Warning,
 	Run: func(p *lint.Pass) {
 		sig := sigTokens(p)
@@ -105,10 +106,16 @@ var assignInCondition = &lint.Analyzer{
 					}
 				case token.Assign:
 					// depth 1 = directly in the condition; ((x = y))
-					// sits at depth 2 and is the accepted idiom.
+					// sits at depth 2 and is always accepted.
 					if depth == 1 && (k != token.KwFor || clause == 1) {
-						p.Reportf(p.File.Tokens[sig[i]].Off,
-							"assignment in %s condition (did you mean ==?)", k)
+						switch classifyCondAssign(p, sig, i, k) {
+						case "literal":
+							p.Reportf(p.File.Tokens[sig[i]].Off,
+								"assignment of a constant in %s condition (did you mean ==?)", k)
+						case "precedence":
+							p.Reportf(p.File.Tokens[sig[i]].Off,
+								"assignment mixed with &&/|| in %s condition: = binds last, the variable gets the boolean", k)
+						}
 					}
 				}
 				if depth == 0 {
@@ -117,6 +124,57 @@ var assignInCondition = &lint.Analyzer{
 			}
 		}
 	},
+}
+
+// classifyCondAssign inspects the right-hand side of an assignment found
+// at condition depth 1. "literal" means the RHS is a bare constant (the ==
+// typo class); "precedence" means the condition mixes the assignment with
+// && or || at the same level (the variable receives the boolean); ""
+// means the assign-and-test idiom, which is accepted.
+func classifyCondAssign(p *lint.Pass, sig []int, i int, kw token.Kind) string {
+	depth := 1
+	var rhs []token.Kind
+	for j := i + 1; j < len(sig); j++ {
+		k := p.File.Tokens[sig[j]].Kind
+		switch k {
+		case token.LParen, token.LBracket, token.LBrace:
+			depth++
+		case token.RParen, token.RBracket, token.RBrace:
+			depth--
+			if depth == 0 {
+				return classifyRHS(rhs)
+			}
+		case token.Semicolon:
+			if depth == 1 && kw == token.KwFor {
+				return classifyRHS(rhs) // end of the for's middle clause
+			}
+		case token.LAnd, token.LOr:
+			if depth == 1 {
+				return "precedence"
+			}
+		case token.Comma:
+			if depth == 1 {
+				return classifyRHS(rhs) // comma operator ends this RHS
+			}
+		}
+		rhs = append(rhs, k)
+	}
+	return classifyRHS(rhs)
+}
+
+// classifyRHS reports "literal" for a bare (optionally negated) constant.
+func classifyRHS(rhs []token.Kind) string {
+	if len(rhs) > 0 && (rhs[0] == token.Minus || rhs[0] == token.Not || rhs[0] == token.Tilde) {
+		rhs = rhs[1:]
+	}
+	if len(rhs) != 1 {
+		return ""
+	}
+	switch rhs[0] {
+	case token.IntLit, token.FloatLit, token.StringLit, token.CharLit, token.KwNil:
+		return "literal"
+	}
+	return ""
 }
 
 var noEffectStatement = &lint.Analyzer{

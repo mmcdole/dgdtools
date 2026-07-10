@@ -128,6 +128,9 @@ var lifecycleChain = &lint.Analyzer{
 			if !contains(names, name) {
 				return true
 			}
+			if !parentDefines(p, name) {
+				return true // nothing to chain: no parent defines it
+			}
 			if !chainsCall(p.File, it, name) {
 				p.Reportf(p.File.Tokens[it.NameIdx].Off,
 					"%s() does not chain ::%s()", name, name)
@@ -135,6 +138,29 @@ var lifecycleChain = &lint.Analyzer{
 			return true
 		})
 	},
+}
+
+// parentDefines reports whether any inherited chain defines the function —
+// chaining ::name() is only expected when a parent actually has one.
+// Without an index (or with unresolvable inherits) it assumes yes, keeping
+// the tier-1-only behavior.
+func parentDefines(p *lint.Pass, name string) bool {
+	if p.Index == nil || p.Object == nil {
+		return true
+	}
+	for _, ref := range p.Object.Inherits {
+		if !ref.Resolved {
+			return true // cannot verify: keep the old behavior
+		}
+		sub := p.Index.Chain(ref.Path)
+		if sub.Partial {
+			return true
+		}
+		if _, ok := sub.Funcs[name]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func contains(list []string, s string) bool {
