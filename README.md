@@ -96,7 +96,10 @@ lint:
   # Lib-path globs served by virtual-object daemons (no backing .c file).
   virtual_paths: []
 
-  enable: []                 # rules to turn on beyond the defaults
+  # Rules run by their built-in defaults (`dgdlint -rules` lists them);
+  # enable adds, disable removes. The rules: section only tunes settings —
+  # listing a rule there does not enable it.
+  enable: []
   disable: []
   rules:
     raw-inherit-path: { severity: warning, deny: ["/std/", "/obj/"] }

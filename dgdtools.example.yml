@@ -48,6 +48,9 @@ lint:
   # handled with an exclude (e.g. "**/var/**").
   virtual_paths: []
 
+  # Rules run by their built-in defaults (see `dgdlint -rules`); enable
+  # adds to the defaults, disable removes. The rules: section below only
+  # TUNES a rule's settings — listing one there does not enable it.
   enable: []                 # e.g. [raw-inherit-path, missing-visibility]
   disable: []
   rules:
