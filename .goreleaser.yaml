@@ -1,0 +1,48 @@
+version: 2
+
+project_name: dgdtools
+
+builds:
+  - id: dgdfmt
+    main: ./cmd/dgdfmt
+    binary: dgdfmt
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags: ["-s -w -X main.version=v{{ .Version }}"]
+  - id: dgdlint
+    main: ./cmd/dgdlint
+    binary: dgdlint
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags: ["-s -w -X main.version=v{{ .Version }}"]
+  - id: dgdcmp
+    main: ./cmd/dgdcmp
+    binary: dgdcmp
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags: ["-s -w -X main.version=v{{ .Version }}"]
+
+# One archive per platform containing all three tools.
+archives:
+  - name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - dgdtools.example.yml
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs"
+      - "^ci"
+      - "^README"
