@@ -101,6 +101,7 @@ type VarInfo struct {
 type InheritRef struct {
 	Raw      string // source text of the path expression
 	Path     string // resolved lib path (no .c)
+	Label    string // explicit DGD inherit label, empty when unlabeled
 	Resolved bool
 	Private  bool // private inherit: hidden from call_other in inheritors
 	Off      uint32
@@ -803,6 +804,9 @@ func (ix *Index) resolveInherit(f *token.File, it *structure.Item, libPath strin
 	ref := InheritRef{
 		Raw: raw, Off: f.Tokens[it.PathFirst].Off,
 		Private: it.Has(f, token.KwPrivate),
+	}
+	if it.LabelIdx >= 0 {
+		ref.Label = string(f.Text(f.Tokens[it.LabelIdx]))
 	}
 
 	defs := ix.fileDefines(f.Path)

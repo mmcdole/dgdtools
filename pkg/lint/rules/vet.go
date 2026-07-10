@@ -6,7 +6,6 @@ package rules
 // mismatches on dispatched calls are silently padded with nil or dropped.
 
 import (
-
 	"github.com/mmcdole/dgdtools/pkg/diag"
 	"github.com/mmcdole/dgdtools/pkg/index"
 	"github.com/mmcdole/dgdtools/pkg/lint"
@@ -79,10 +78,10 @@ func sigTokens(p *lint.Pass) []int {
 
 var assignInCondition = &lint.Analyzer{
 	Name: "assignment-in-condition",
-	Doc: "a suspicious assignment inside an if/while/for condition: " +
-		"assigning a bare literal (a typo for ==) or mixing assignment " +
-		"with && or || (`=` binds last, so the variable gets the boolean). " +
-		"The assign-and-test idiom `if (sz = sizeof(x))` is accepted",
+	Doc: "a likely semantic bug in an if/while/for condition: assigning " +
+		"a bare constant (possibly a typo for ==) or storing the result of " +
+		"unparenthesized &&/||; ordinary assign-and-test is accepted and " +
+		"compile-invalid targets are left to DGD",
 	Tier: 1, Default: true, DefaultSeverity: diag.Warning,
 	Run: func(p *lint.Pass) {
 		sig := sigTokens(p)
@@ -92,89 +91,203 @@ var assignInCondition = &lint.Analyzer{
 				p.File.Tokens[sig[j+1]].Kind != token.LParen {
 				continue
 			}
-			depth := 0
-			clause := 0 // for(init; COND; update): only the middle clause
-			for i := j + 1; i < len(sig); i++ {
-				switch p.File.Tokens[sig[i]].Kind {
-				case token.LParen, token.LBracket, token.LBrace:
-					depth++
-				case token.RParen, token.RBracket, token.RBrace:
-					depth--
-				case token.Semicolon:
-					if depth == 1 {
-						clause++
-					}
-				case token.Assign:
-					// depth 1 = directly in the condition; ((x = y))
-					// sits at depth 2 and is always accepted.
-					if depth == 1 && (k != token.KwFor || clause == 1) {
-						switch classifyCondAssign(p, sig, i, k) {
-						case "literal":
-							p.Reportf(p.File.Tokens[sig[i]].Off,
-								"assignment of a constant in %s condition (did you mean ==?)", k)
-						case "precedence":
-							p.Reportf(p.File.Tokens[sig[i]].Off,
-								"assignment mixed with &&/|| in %s condition: = binds last, the variable gets the boolean", k)
-						}
-					}
-				}
-				if depth == 0 {
-					break
-				}
+			start, end, ok := conditionClause(p, sig, j, k)
+			if ok {
+				reportCondAssignments(p, sig, start, end, k)
 			}
 		}
 	},
 }
 
-// classifyCondAssign inspects the right-hand side of an assignment found
-// at condition depth 1. "literal" means the RHS is a bare constant (the ==
-// typo class); "precedence" means the condition mixes the assignment with
-// && or || at the same level (the variable receives the boolean); ""
-// means the assign-and-test idiom, which is accepted.
-func classifyCondAssign(p *lint.Pass, sig []int, i int, kw token.Kind) string {
-	depth := 1
-	var rhs []token.Kind
-	for j := i + 1; j < len(sig); j++ {
-		k := p.File.Tokens[sig[j]].Kind
-		switch k {
+type condAssignClass uint8
+
+const (
+	condAssignOK condAssignClass = iota
+	condAssignConstant
+	condAssignLogicalRHS
+)
+
+// conditionClause returns the if/while condition or the middle clause of
+// a for loop as indexes into sig, with end exclusive.
+func conditionClause(p *lint.Pass, sig []int, kwIdx int, kw token.Kind) (start, end int, ok bool) {
+	start = kwIdx + 2
+	depth := 0
+	semis := 0
+	for i := kwIdx + 1; i < len(sig); i++ {
+		switch p.File.Tokens[sig[i]].Kind {
 		case token.LParen, token.LBracket, token.LBrace:
 			depth++
 		case token.RParen, token.RBracket, token.RBrace:
 			depth--
 			if depth == 0 {
-				return classifyRHS(rhs)
+				if kw != token.KwFor {
+					return start, i, true
+				}
+				return 0, 0, false
 			}
 		case token.Semicolon:
-			if depth == 1 && kw == token.KwFor {
-				return classifyRHS(rhs) // end of the for's middle clause
+			if kw == token.KwFor && depth == 1 {
+				semis++
+				switch semis {
+				case 1:
+					start = i + 1
+				case 2:
+					return start, i, true
+				}
 			}
-		case token.LAnd, token.LOr:
-			if depth == 1 {
-				return "precedence"
-			}
+		}
+	}
+	return 0, 0, false
+}
+
+// reportCondAssignments splits a condition on root-level commas, then
+// reports at most one finding for each assignment chain in a segment.
+func reportCondAssignments(p *lint.Pass, sig []int, start, end int, kw token.Kind) {
+	segmentStart := start
+	depth := 0
+	for i := start; i < end; i++ {
+		switch p.File.Tokens[sig[i]].Kind {
+		case token.LParen, token.LBracket, token.LBrace:
+			depth++
+		case token.RParen, token.RBracket, token.RBrace:
+			depth--
 		case token.Comma:
-			if depth == 1 {
-				return classifyRHS(rhs) // comma operator ends this RHS
+			if depth == 0 {
+				reportCondSegment(p, sig, segmentStart, i, kw)
+				segmentStart = i + 1
+			}
+		}
+	}
+	reportCondSegment(p, sig, segmentStart, end, kw)
+}
+
+func reportCondSegment(p *lint.Pass, sig []int, start, end int, kw token.Kind) {
+	var assigns []int
+	depth := 0
+	ternary := false
+	for i := start; i < end; i++ {
+		k := p.File.Tokens[sig[i]].Kind
+		switch k {
+		case token.LParen, token.LBracket, token.LBrace:
+			depth++
+		case token.RParen, token.RBracket, token.RBrace:
+			depth--
+		case token.Assign:
+			if depth == 0 {
+				assigns = append(assigns, i)
+			}
+		case token.Question, token.Colon:
+			if depth == 0 {
+				ternary = true
+			}
+		}
+	}
+	if len(assigns) == 0 || ternary {
+		return
+	}
+
+	lhsStart := start
+	for _, assign := range assigns {
+		if invalidCondAssignLHS(p, sig, lhsStart, assign) {
+			return // the DGD compiler owns this diagnostic
+		}
+		lhsStart = assign + 1
+	}
+
+	last := assigns[len(assigns)-1]
+	switch classifyCondAssignRHS(p, sig, last+1, end) {
+	case condAssignConstant:
+		p.Reportf(p.File.Tokens[sig[last]].Off,
+			"assignment of a constant in %s condition (did you mean ==?)", kw)
+	case condAssignLogicalRHS:
+		p.Reportf(p.File.Tokens[sig[last]].Off,
+			"assignment in %s condition stores the result of &&/||; parenthesize the assignment or logical RHS to make the intended value explicit", kw)
+	}
+}
+
+// invalidCondAssignLHS recognizes the DGD-documented `!x = value` and
+// `ready && x = value` classes. They are compile errors, not lint findings.
+func invalidCondAssignLHS(p *lint.Pass, sig []int, start, end int) bool {
+	start, end = stripOuterParens(p, sig, start, end)
+	if start >= end {
+		return true
+	}
+	switch p.File.Tokens[sig[start]].Kind {
+	case token.Not, token.Tilde, token.Minus:
+		return true
+	}
+	depth := 0
+	for i := start; i < end; i++ {
+		switch p.File.Tokens[sig[i]].Kind {
+		case token.LParen, token.LBracket, token.LBrace:
+			depth++
+		case token.RParen, token.RBracket, token.RBrace:
+			depth--
+		case token.LAnd, token.LOr:
+			if depth == 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func stripOuterParens(p *lint.Pass, sig []int, start, end int) (int, int) {
+	for end-start >= 2 && p.File.Tokens[sig[start]].Kind == token.LParen {
+		depth := 0
+		match := -1
+	findMatch:
+		for i := start; i < end; i++ {
+			switch p.File.Tokens[sig[i]].Kind {
+			case token.LParen:
+				depth++
+			case token.RParen:
+				depth--
+				if depth == 0 {
+					match = i
+					break findMatch
+				}
+			}
+		}
+		if match != end-1 {
+			break
+		}
+		start++
+		end--
+	}
+	return start, end
+}
+
+// classifyCondAssignRHS reports logical-result capture or a bare,
+// optionally negated constant. Parenthesized values express intent.
+func classifyCondAssignRHS(p *lint.Pass, sig []int, start, end int) condAssignClass {
+	depth := 0
+	var rhs []token.Kind
+	for i := start; i < end; i++ {
+		k := p.File.Tokens[sig[i]].Kind
+		switch k {
+		case token.LParen, token.LBracket, token.LBrace:
+			depth++
+		case token.RParen, token.RBracket, token.RBrace:
+			depth--
+		case token.LAnd, token.LOr:
+			if depth == 0 {
+				return condAssignLogicalRHS
 			}
 		}
 		rhs = append(rhs, k)
 	}
-	return classifyRHS(rhs)
-}
-
-// classifyRHS reports "literal" for a bare (optionally negated) constant.
-func classifyRHS(rhs []token.Kind) string {
 	if len(rhs) > 0 && (rhs[0] == token.Minus || rhs[0] == token.Not || rhs[0] == token.Tilde) {
 		rhs = rhs[1:]
 	}
 	if len(rhs) != 1 {
-		return ""
+		return condAssignOK
 	}
 	switch rhs[0] {
 	case token.IntLit, token.FloatLit, token.StringLit, token.CharLit, token.KwNil:
-		return "literal"
+		return condAssignConstant
 	}
-	return ""
+	return condAssignOK
 }
 
 var noEffectStatement = &lint.Analyzer{
@@ -349,4 +462,3 @@ func splitArgsLocal(p *lint.Pass, sig []int, open int) [][]int {
 	}
 	return nil
 }
-
