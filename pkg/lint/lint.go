@@ -6,6 +6,7 @@ package lint
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -164,6 +165,9 @@ func (r *Runner) Run(paths []string) ([]diag.Diagnostic, error) {
 	var jobs []job
 	root := r.Config.AbsRoot()
 	for _, p := range paths {
+		if _, err := os.Stat(p); err != nil {
+			return nil, err // a mistyped path must fail loudly, not pass
+		}
 		err := fileset.Walk(p, r.Config.Exclude, func(path, rel string) {
 			if strings.HasSuffix(path, ".c") {
 				jobs = append(jobs, job{path, rel})
