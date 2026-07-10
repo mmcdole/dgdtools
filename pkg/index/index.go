@@ -59,7 +59,11 @@ type StringCall struct {
 	Kind       CallKind
 	Target     TargetKind
 	TargetPath string // lib path, when Target == TargetPath
-	Off        uint32
+	// NArgs is the number of arguments the callee will receive, when the
+	// call site determines it (->, call_other, call_out); -1 when unknown
+	// (config registrars, spread arguments).
+	NArgs int
+	Off   uint32
 }
 
 type FuncInfo struct {
@@ -67,7 +71,18 @@ type FuncInfo struct {
 	// PrototypeOnly marks a declared-but-never-defined function: DGD
 	// compiles these fine and raises "Undefined function" at call time.
 	PrototypeOnly bool
-	Off           uint32
+	// MinArgs/MaxArgs bound the accepted argument count. MaxArgs -1 means
+	// unbounded (trailing ellipsis). Under non-strict typechecking DGD
+	// silently pads missing arguments with nil and drops extras.
+	MinArgs, MaxArgs int
+	Off              uint32
+}
+
+// BadInclude is a #include whose target file could not be found — a
+// compile error the moment the object is loaded.
+type BadInclude struct {
+	Raw string
+	Off uint32
 }
 
 // PathRef is a literal object path passed to a path-taking function
@@ -101,6 +116,7 @@ type ObjectInfo struct {
 	Inherits        []InheritRef
 	Calls           []StringCall
 	PathRefs        []PathRef
+	BadIncludes     []BadInclude
 	AutoSave        bool
 }
 
@@ -203,7 +219,9 @@ func Build(cfg *config.Config) (*Index, error) {
 		for name, fi := range ch.Funcs {
 			ix.AutoFuncs[name] = FuncInfo{
 				Static: fi.Static, Private: fi.Private,
-				PrototypeOnly: fi.PrototypeOnly, Off: fi.Off,
+				PrototypeOnly: fi.PrototypeOnly,
+				MinArgs:       fi.MinArgs, MaxArgs: fi.MaxArgs,
+				Off:           fi.Off,
 			}
 		}
 	}
@@ -237,11 +255,13 @@ func (ix *Index) indexFile(fsPath, libPath string) *ObjectInfo {
 				continue // operator overloads are not name-callable
 			}
 			name := string(f.Text(nameTok))
+			minA, maxA := countParams(f, it)
 			fi := FuncInfo{
 				Static:        it.Has(f, token.KwStatic),
 				Private:       it.Has(f, token.KwPrivate),
 				PrototypeOnly: it.Kind == structure.Prototype,
-				Off:           nameTok.Off,
+				MinArgs:       minA, MaxArgs: maxA,
+				Off: nameTok.Off,
 			}
 			// A definition always wins over a prototype.
 			if _, ok := obj.Funcs[name]; !ok || !fi.PrototypeOnly {
@@ -262,7 +282,30 @@ func (ix *Index) indexFile(fsPath, libPath string) *ObjectInfo {
 
 	ix.mergeIncludedCode(obj)
 	ix.scanCalls(obj)
+	ix.scanBadIncludes(obj)
 	return obj
+}
+
+// scanBadIncludes records #include directives whose target cannot be
+// found — compile errors at load time.
+func (ix *Index) scanBadIncludes(obj *ObjectInfo) {
+	for _, t := range obj.File.Tokens {
+		if t.Kind != token.Directive {
+			continue
+		}
+		text := string(obj.File.Text(t))
+		m := includeRe.FindStringSubmatch(text)
+		if m == nil {
+			continue
+		}
+		inc := `"` + m[3] + `"`
+		if m[2] != "" {
+			inc = "<" + m[2] + ">"
+		}
+		if len(ix.resolveIncludePath(obj.FSPath, inc)) == 0 {
+			obj.BadIncludes = append(obj.BadIncludes, BadInclude{Raw: inc, Off: t.Off})
+		}
+	}
 }
 
 // mergeIncludedCode folds function and variable definitions from #included
@@ -347,11 +390,13 @@ func (ix *Index) codeTableFor(fsPath string) *codeTable {
 			}
 			name := string(f.Text(f.Tokens[it.NameIdx]))
 			if _, ok := ct.funcs[name]; !ok || it.Kind == structure.FuncDef {
+				minA, maxA := countParams(f, it)
 				ct.funcs[name] = FuncInfo{
 					Static:        it.Has(f, token.KwStatic),
 					Private:       it.Has(f, token.KwPrivate),
 					PrototypeOnly: it.Kind == structure.Prototype,
-					Off:           f.Tokens[it.NameIdx].Off,
+					MinArgs:       minA, MaxArgs: maxA,
+					Off: f.Tokens[it.NameIdx].Off,
 				}
 			}
 		case structure.VarDecl:
@@ -363,6 +408,68 @@ func (ix *Index) codeTableFor(fsPath string) *codeTable {
 	}
 	ix.codeCache.Store(fsPath, ct)
 	return ct
+}
+
+// countParams derives the accepted argument-count range of a function
+// item: a per-parameter `varargs` keyword makes that and later parameters
+// optional, a class-level `varargs` makes all optional, and a trailing
+// `...` collects unbounded extras.
+func countParams(f *token.File, it *structure.Item) (minArgs, maxArgs int) {
+	if it.ParamsL < 0 || it.ParamsR < 0 {
+		return 0, -1
+	}
+	nparams := 0
+	firstOptional := -1
+	ellipsis := false
+	depth := 0
+	sawTokens := false
+	for i := it.ParamsL; i <= it.ParamsR; i++ {
+		t := f.Tokens[i]
+		switch t.Kind {
+		case token.LParen, token.LBracket, token.LBrace:
+			depth++
+		case token.RParen, token.RBracket, token.RBrace:
+			depth--
+		case token.Comma:
+			if depth == 1 {
+				nparams++
+			}
+		case token.KwVarargs:
+			if depth == 1 && firstOptional < 0 {
+				firstOptional = nparams
+			}
+		case token.Ellipsis:
+			if depth == 1 {
+				ellipsis = true
+			}
+		default:
+			if !t.Kind.IsTrivia() && depth == 1 {
+				if t.Kind != token.KwVoid || sawTokens {
+					sawTokens = true
+				}
+			}
+		}
+	}
+	if sawTokens {
+		nparams++ // params = commas + 1 when the list is non-empty
+	}
+	minArgs, maxArgs = nparams, nparams
+	if firstOptional >= 0 {
+		minArgs = firstOptional
+	}
+	if it.Has(f, token.KwVarargs) {
+		minArgs = 0
+	}
+	if ellipsis {
+		maxArgs = -1 // the collector param absorbs any extras
+		if minArgs == nparams {
+			minArgs = nparams - 1 // the collector itself is optional
+		}
+	}
+	if minArgs < 0 {
+		minArgs = 0
+	}
+	return minArgs, maxArgs
 }
 
 // normalizeLibPath strips .c and makes the path absolute relative to the
@@ -453,7 +560,8 @@ func (ix *Index) scanCalls(obj *ObjectInfo) {
 			}
 			call := StringCall{
 				Func: text(j + 1), Registrar: "->", Kind: CrossObject,
-				Off: f.Tokens[sig[j+1]].Off,
+				NArgs: countArgs(f, splitArgs(f, sig, j+2)),
+				Off:   f.Tokens[sig[j+1]].Off,
 			}
 			call.Target, call.TargetPath = ix.targetBefore(f, sig, j, obj.LibPath)
 			obj.Calls = append(obj.Calls, call)
@@ -502,10 +610,19 @@ func (ix *Index) scanCalls(obj *ObjectInfo) {
 			}
 			call := StringCall{
 				Func: fn, Registrar: name, Kind: reg.kind,
-				Target: TargetSelf, Off: fnTok.Off,
+				Target: TargetSelf, NArgs: -1, Off: fnTok.Off,
 			}
 			if reg.targetArg0 {
 				call.Target, call.TargetPath = classifyTarget(f, args[0], obj.LibPath)
+			}
+			// call_other(obj, "fn", rest...) and call_out("fn", delay,
+			// rest...) both hand exactly the rest to the callee.
+			if name == "call_other" || name == "call_out" {
+				if len(args) >= 2 {
+					call.NArgs = countArgs(f, args[2:])
+				} else {
+					call.NArgs = 0
+				}
 			}
 			if !isIdentName(fn) {
 				// Two-argument registrar form: fp("/obj/path", "fn") binds
@@ -567,6 +684,19 @@ func classifyTarget(f *token.File, arg []int, fromLib string) (TargetKind, strin
 		return TargetSelf, ""
 	}
 	return TargetUnknown, ""
+}
+
+// countArgs counts call arguments; -1 when a spread ("expr...") makes the
+// count unknowable statically.
+func countArgs(f *token.File, args [][]int) int {
+	for _, arg := range args {
+		for _, i := range arg {
+			if f.Tokens[i].Kind == token.Ellipsis {
+				return -1
+			}
+		}
+	}
+	return len(args)
 }
 
 // splitArgs returns the token indexes of each top-level argument of the
@@ -921,7 +1051,9 @@ func (ix *Index) LookupCallable(fromLib string, call StringCall) Lookup {
 	}
 	if fn, ok := ix.AutoFuncs[call.Func]; ok {
 		return Lookup{State: LookupFound, Fn: ChainFunc{
-			Static: fn.Static, Private: fn.Private, Off: fn.Off, DefinedIn: "(auto object)",
+			Static: fn.Static, Private: fn.Private,
+			MinArgs: fn.MinArgs, MaxArgs: fn.MaxArgs,
+			Off:     fn.Off, DefinedIn: "(auto object)",
 		}}
 	}
 	if ch.Partial {
@@ -1000,10 +1132,11 @@ type Chain struct {
 }
 
 type ChainFunc struct {
-	Static, Private bool
-	PrototypeOnly   bool
-	Off             uint32
-	DefinedIn       string
+	Static, Private  bool
+	PrototypeOnly    bool
+	MinArgs, MaxArgs int
+	Off              uint32
+	DefinedIn        string
 }
 
 // Chain returns the flattened chain for a lib path, caching results.
@@ -1069,7 +1202,8 @@ func (ix *Index) chainLocked(libPath string, visiting map[string]bool) *Chain {
 		ch.Funcs[name] = ChainFunc{
 			Static: fi.Static, Private: fi.Private,
 			PrototypeOnly: fi.PrototypeOnly,
-			Off:           fi.Off, DefinedIn: libPath,
+			MinArgs:       fi.MinArgs, MaxArgs: fi.MaxArgs,
+			Off: fi.Off, DefinedIn: libPath,
 		}
 	}
 	ch.Objects = append(ch.Objects, libPath)

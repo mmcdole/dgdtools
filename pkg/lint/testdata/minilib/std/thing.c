@@ -28,3 +28,13 @@ secret_fn()
 {
     return 3;
 }
+
+public void
+takes_two(int a, int b)
+{
+}
+
+public void
+flex(int a, mixed extra...)
+{
+}

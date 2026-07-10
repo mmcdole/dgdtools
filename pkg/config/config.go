@@ -72,6 +72,9 @@ type Lint struct {
 	// VirtualPaths are lib-path globs served by virtual-object daemons —
 	// objects that exist without a backing .c file.
 	VirtualPaths []string `yaml:"virtual_paths"`
+	// FormatRegistry maps scanf/printf-style functions to the argument
+	// index (0-based) of their format string. Built-in: sscanf (arg 1).
+	FormatRegistry map[string]int `yaml:"format_registry"`
 
 	Rules     map[string]RuleSettings `yaml:"rules"`
 	PathRules []PathRule              `yaml:"path_rules"`
