@@ -65,6 +65,14 @@ type Lint struct {
 	// object as persisting via save_object/restore_object.
 	AutosaveMarkers []string `yaml:"autosave_markers"`
 
+	// ObjectRegistry maps path-taking functions to the argument index
+	// (0-based) holding an object path. Built-in: clone_object,
+	// compile_object, find_object (all arg 0).
+	ObjectRegistry map[string]int `yaml:"object_registry"`
+	// VirtualPaths are lib-path globs served by virtual-object daemons —
+	// objects that exist without a backing .c file.
+	VirtualPaths []string `yaml:"virtual_paths"`
+
 	Rules     map[string]RuleSettings `yaml:"rules"`
 	PathRules []PathRule              `yaml:"path_rules"`
 	FailOn    string                  `yaml:"fail_on"` // info | warning | error

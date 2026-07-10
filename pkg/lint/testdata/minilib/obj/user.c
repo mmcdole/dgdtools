@@ -25,6 +25,10 @@ tick()
     "/std/thing"->visible_fn();
     "/std/thing"->nothere_fn();             /* BUG: callable-not-found */
     "/std/thing"->hidden_fn();              /* BUG: static cross-object */
+    never_defined();                        /* BUG: undefined-prototype */
+    clone_object("/obj/nothing");           /* BUG: target-object-missing */
+    "/std/gone"->poke();                    /* BUG: target-object-missing */
+    "/virtual/room1"->probe();              /* ok: virtual path */
 }
 
 public void

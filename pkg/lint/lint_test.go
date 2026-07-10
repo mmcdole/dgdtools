@@ -21,6 +21,7 @@ func minilibConfig() *config.Config {
 	cfg.Lint.IncludeFile = "/dgd/include/Std.h"
 	cfg.Lint.AutoObjects = []string{"/dgd/lib/object"}
 	cfg.Lint.CallRegistry = map[string]int{"register_handler": 0}
+	cfg.Lint.VirtualPaths = []string{"virtual/**"}
 	return cfg
 }
 
@@ -67,6 +68,16 @@ func TestTier2SeededBugs(t *testing.T) {
 	assert.Contains(t, got, "callable-not-found user.c:26", "literal-path -> missing")
 	assert.Contains(t, got, "static-autosave-var saver.c:4")
 	assert.Contains(t, got, "lifecycle-chain messy.c:6")
+	assert.Contains(t, got, "undefined-prototype user.c:28", "call to declared-never-defined function")
+	assert.Contains(t, got, "target-object-missing user.c:29", "clone_object of missing file")
+	assert.Contains(t, got, "target-object-missing user.c:30", "-> on missing object")
+	assert.Contains(t, got, "target-object-missing broken.c:3", "resolved inherit of missing file")
+
+	// Virtual paths and forward-declared-then-defined functions are clean.
+	for _, k := range got {
+		assert.NotContains(t, k, "user.c:31", "virtual path is exempt")
+		assert.NotContains(t, k, "thing.c:3", "forward decl with definition is fine")
+	}
 
 	// Static via same-object call_other is legal in DGD: no finding.
 	for _, k := range got {

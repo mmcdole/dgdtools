@@ -38,6 +38,15 @@ lint:
   # Function/macro names that mark an object as auto-saving.
   autosave_markers: [set_auto_save]
 
+  # Functions taking a literal object path (clone_object, compile_object,
+  # find_object are built in); value = 0-based argument index.
+  object_registry: {}
+
+  # Lib-path globs served by virtual-object daemons (objects with no
+  # backing .c file). Generated-data directories are usually better
+  # handled with an exclude (e.g. "**/var/**").
+  virtual_paths: []
+
   enable: []                 # e.g. [raw-inherit-path, missing-visibility]
   disable: []
   rules:

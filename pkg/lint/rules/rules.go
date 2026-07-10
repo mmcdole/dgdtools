@@ -25,6 +25,8 @@ func init() {
 	lint.Register(staticCrossObj)
 	lint.Register(staticAutosaveVar)
 	lint.Register(unresolvedInherit)
+	lint.Register(undefinedPrototype)
+	lint.Register(targetObjectMissing)
 }
 
 // --- tier 1 --------------------------------------------------------------
@@ -267,6 +269,105 @@ var staticAutosaveVar = &lint.Analyzer{
 			if v.Static {
 				p.Reportf(v.Off,
 					"static variable '%s' will not be saved by this auto-saving object", name)
+			}
+		}
+	},
+}
+
+var undefinedPrototype = &lint.Analyzer{
+	Name: "undefined-prototype",
+	Doc: "a function is declared (prototype) but never defined anywhere in " +
+		"the inherit chain, and it is called — DGD compiles this fine and " +
+		"raises a runtime error (\"Undefined function\") at the call",
+	Tier: 2, Default: true, DefaultSeverity: diag.Error,
+	Run: func(p *lint.Pass) {
+		if p.Index == nil || p.Object == nil {
+			return
+		}
+		// String-referenced calls (call_other, ->, call_out, registrars).
+		forEachCall(p, func(call index.StringCall, lk index.Lookup, targetDesc string) {
+			if lk.State != index.LookupFound || !lk.Fn.PrototypeOnly {
+				return
+			}
+			if call.Target == index.TargetSelf && p.Index.ProvidedByUsers(p.LibPath, call.Func) {
+				return // a leaf or sibling module defines it
+			}
+			p.Reportf(call.Off,
+				"'%s' in %s is declared but never defined — calling it is a runtime error",
+				call.Func, lk.Fn.DefinedIn)
+		})
+
+		// Direct local calls: ident( where ident resolves to a
+		// prototype-only chain entry.
+		ch := p.Index.Chain(p.LibPath)
+		if ch.Partial {
+			return // the definition may live in an unresolved parent
+		}
+		defNames := map[int]bool{}
+		p.Structure.Funcs(func(it *structure.Item) bool {
+			defNames[it.NameIdx] = true
+			return true
+		})
+		var sig []int
+		for i, t := range p.File.Tokens {
+			if !t.Kind.IsTrivia() && t.Kind != token.EOF {
+				sig = append(sig, i)
+			}
+		}
+		for j := 0; j+1 < len(sig); j++ {
+			t := p.File.Tokens[sig[j]]
+			if t.Kind != token.Ident || p.File.Tokens[sig[j+1]].Kind != token.LParen {
+				continue
+			}
+			if defNames[sig[j]] { // a declaration/definition header, not a call
+				continue
+			}
+			if j > 0 && p.File.Tokens[sig[j-1]].Kind == token.Arrow {
+				continue // method calls are handled via the index above
+			}
+			name := string(p.File.Text(t))
+			fn, ok := ch.Funcs[name]
+			if !ok || !fn.PrototypeOnly {
+				continue
+			}
+			// Module escape hatch: an inheritor or includer may provide
+			// the definition (directly or through its own chain).
+			if !p.Index.ProvidedByUsers(p.LibPath, name) {
+				p.Reportf(t.Off,
+					"'%s' is declared but never defined (prototype in %s) — calling it is a runtime error",
+					name, fn.DefinedIn)
+			}
+		}
+	},
+}
+
+var targetObjectMissing = &lint.Analyzer{
+	Name: "target-object-missing",
+	Doc: "a literal object path (inherit, clone_object, call_other target, " +
+		"...) has no backing file — loading it is a runtime error; paths " +
+		"served by virtual-object daemons belong in lint.virtual_paths",
+	Tier: 2, Default: true, DefaultSeverity: diag.Error,
+	Run: func(p *lint.Pass) {
+		if p.Index == nil || p.Object == nil {
+			return
+		}
+		missing := func(lib string) bool {
+			return !p.Index.IsVirtual(lib) && !p.Index.ObjectExists(lib)
+		}
+		for _, ref := range p.Object.PathRefs {
+			if missing(ref.Path) {
+				p.Reportf(ref.Off, "object %s does not exist (via %s)", ref.Path, ref.Via)
+			}
+		}
+		for _, call := range p.Object.Calls {
+			if call.Target == index.TargetPath && missing(call.TargetPath) {
+				p.Reportf(call.Off, "object %s does not exist (called via %s)",
+					call.TargetPath, call.Registrar)
+			}
+		}
+		for _, ref := range p.Object.Inherits {
+			if ref.Resolved && missing(ref.Path) {
+				p.Reportf(ref.Off, "inherited object %s does not exist", ref.Path)
 			}
 		}
 	},

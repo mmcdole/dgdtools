@@ -64,7 +64,18 @@ type StringCall struct {
 
 type FuncInfo struct {
 	Static, Private bool
-	Off             uint32
+	// PrototypeOnly marks a declared-but-never-defined function: DGD
+	// compiles these fine and raises "Undefined function" at call time.
+	PrototypeOnly bool
+	Off           uint32
+}
+
+// PathRef is a literal object path passed to a path-taking function
+// (clone_object and friends, per the object registry).
+type PathRef struct {
+	Path string // normalized lib path
+	Via  string // the function it was passed to
+	Off  uint32
 }
 
 type VarInfo struct {
@@ -89,6 +100,7 @@ type ObjectInfo struct {
 	Vars            map[string]VarInfo
 	Inherits        []InheritRef
 	Calls           []StringCall
+	PathRefs        []PathRef
 	AutoSave        bool
 }
 
@@ -112,6 +124,30 @@ type Index struct {
 
 	incMu    sync.Mutex
 	incUsers map[string][]string // lib path -> objects that #include it
+
+	virtual   *fileset.Matcher // lib paths served by virtual-object daemons
+	statCache sync.Map         // lib path -> bool (file exists under root)
+}
+
+// ObjectExists reports whether libPath is backed by an indexed object or a
+// file on disk (independent of exclude patterns).
+func (ix *Index) ObjectExists(libPath string) bool {
+	if ix.Objects[libPath] != nil {
+		return true
+	}
+	if v, ok := ix.statCache.Load(libPath); ok {
+		return v.(bool)
+	}
+	_, err := os.Stat(fileset.FSPath(ix.Root, libPath))
+	exists := err == nil
+	ix.statCache.Store(libPath, exists)
+	return exists
+}
+
+// IsVirtual reports whether libPath matches the configured virtual-object
+// path patterns (objects the driver resolves without a backing file).
+func (ix *Index) IsVirtual(libPath string) bool {
+	return ix.virtual.Match(strings.TrimPrefix(libPath, "/"))
 }
 
 // Build indexes every non-excluded .c file under the config root.
@@ -123,6 +159,7 @@ func Build(cfg *config.Config) (*Index, error) {
 		cfg:       cfg,
 		chains:    map[string]*Chain{},
 		incUsers:  map[string][]string{},
+		virtual:   fileset.NewMatcher(cfg.Lint.VirtualPaths),
 	}
 
 	type job struct{ path, rel string }
@@ -164,7 +201,10 @@ func Build(cfg *config.Config) (*Index, error) {
 	for _, auto := range cfg.Lint.AutoObjects {
 		ch := ix.Chain(normalizeLibPath(auto, "/"))
 		for name, fi := range ch.Funcs {
-			ix.AutoFuncs[name] = FuncInfo{Static: fi.Static, Private: fi.Private, Off: fi.Off}
+			ix.AutoFuncs[name] = FuncInfo{
+				Static: fi.Static, Private: fi.Private,
+				PrototypeOnly: fi.PrototypeOnly, Off: fi.Off,
+			}
 		}
 	}
 	return ix, nil
@@ -198,13 +238,13 @@ func (ix *Index) indexFile(fsPath, libPath string) *ObjectInfo {
 			}
 			name := string(f.Text(nameTok))
 			fi := FuncInfo{
-				Static:  it.Has(f, token.KwStatic),
-				Private: it.Has(f, token.KwPrivate),
-				Off:     nameTok.Off,
+				Static:        it.Has(f, token.KwStatic),
+				Private:       it.Has(f, token.KwPrivate),
+				PrototypeOnly: it.Kind == structure.Prototype,
+				Off:           nameTok.Off,
 			}
-			// A definition wins over a prototype's specifiers.
-			if prev, ok := obj.Funcs[name]; !ok || it.Kind == structure.FuncDef {
-				_ = prev
+			// A definition always wins over a prototype.
+			if _, ok := obj.Funcs[name]; !ok || !fi.PrototypeOnly {
 				obj.Funcs[name] = fi
 			}
 		case structure.VarDecl:
@@ -258,7 +298,10 @@ func (ix *Index) mergeIncludedCode(obj *ObjectInfo) {
 					}
 				}
 				for name, fi := range ct.funcs {
-					if _, own := obj.Funcs[name]; !own {
+					own, exists := obj.Funcs[name]
+					// An included definition also satisfies the includer's
+					// own bare prototype.
+					if !exists || (own.PrototypeOnly && !fi.PrototypeOnly) {
 						obj.Funcs[name] = fi
 					}
 				}
@@ -305,9 +348,10 @@ func (ix *Index) codeTableFor(fsPath string) *codeTable {
 			name := string(f.Text(f.Tokens[it.NameIdx]))
 			if _, ok := ct.funcs[name]; !ok || it.Kind == structure.FuncDef {
 				ct.funcs[name] = FuncInfo{
-					Static:  it.Has(f, token.KwStatic),
-					Private: it.Has(f, token.KwPrivate),
-					Off:     f.Tokens[it.NameIdx].Off,
+					Static:        it.Has(f, token.KwStatic),
+					Private:       it.Has(f, token.KwPrivate),
+					PrototypeOnly: it.Kind == structure.Prototype,
+					Off:           f.Tokens[it.NameIdx].Off,
 				}
 			}
 		case structure.VarDecl:
@@ -358,6 +402,20 @@ func (ix *Index) registrars() map[string]registrar {
 	return m
 }
 
+// objectRegistrars maps path-taking functions (DGD kfuns by default) to the
+// argument index holding an object path.
+func (ix *Index) objectRegistrars() map[string]int {
+	m := map[string]int{
+		"clone_object":   0,
+		"compile_object": 0,
+		"find_object":    0,
+	}
+	for name, arg := range ix.cfg.Lint.ObjectRegistry {
+		m[name] = arg
+	}
+	return m
+}
+
 // scanCalls extracts string-referenced call sites and autosave markers.
 func (ix *Index) scanCalls(obj *ObjectInfo) {
 	f := obj.File
@@ -380,6 +438,7 @@ func (ix *Index) scanCalls(obj *ObjectInfo) {
 		return string(f.Text(f.Tokens[sig[j]]))
 	}
 	regs := ix.registrars()
+	objRegs := ix.objectRegistrars()
 	markers := map[string]bool{}
 	for _, m := range ix.autosaveMarkers() {
 		markers[m] = true
@@ -402,9 +461,23 @@ func (ix *Index) scanCalls(obj *ObjectInfo) {
 		case token.Ident:
 			name := text(j)
 			if markers[name] {
-				// Markers match bare too: D_STORE-style daemon macros
-				// appear as MACRO->register(...), not calls.
+				// Markers match bare too: daemon macros appear as
+				// MACRO->register(...), not calls.
 				obj.AutoSave = true
+			}
+			if argIdx, ok := objRegs[name]; ok && kind(j+1) == token.LParen && kind(j-1) != token.Arrow {
+				args := splitArgs(f, sig, j+1)
+				if argIdx < len(args) && len(args[argIdx]) == 1 {
+					pt := f.Tokens[args[argIdx][0]]
+					if pt.Kind == token.StringLit {
+						if p, ok := unquote(string(f.Text(pt))); ok && strings.Contains(p, "/") {
+							obj.PathRefs = append(obj.PathRefs, PathRef{
+								Path: normalizeLibPath(p, path.Dir(obj.LibPath)),
+								Via:  name, Off: pt.Off,
+							})
+						}
+					}
+				}
 			}
 			reg, ok := regs[name]
 			if !ok || kind(j+1) != token.LParen {
@@ -885,6 +958,40 @@ func (ix *Index) LookupCallable(fromLib string, call StringCall) Lookup {
 		Note: fmt.Sprintf(" (nor in any of its %d inheritors)", len(users))}
 }
 
+// ProvidedByUsers reports whether any inheritor/includer of libPath
+// supplies a real (non-prototype) definition of fn — the module escape
+// hatch for mixins whose callbacks and prototypes are satisfied by
+// siblings or leaves. Returns true (assume provided) when the bounded
+// search cannot decide.
+func (ix *Index) ProvidedByUsers(libPath, fn string) bool {
+	users := ix.UsersOf(libPath)
+	if len(users) == 0 {
+		return false
+	}
+	for _, u := range users {
+		if obj := ix.Objects[u]; obj != nil {
+			if f, ok := obj.Funcs[fn]; ok && !f.PrototypeOnly {
+				return true
+			}
+		}
+	}
+	checked := 0
+	for _, u := range users {
+		if checked >= maxUserChains {
+			return true // undecided: never report on a bounded search
+		}
+		uch := ix.Chain(u)
+		checked++
+		if uch.Partial {
+			return true
+		}
+		if f, ok := uch.Funcs[fn]; ok && !f.PrototypeOnly {
+			return true
+		}
+	}
+	return false
+}
+
 // Chain is the flattened inherit view of one object.
 type Chain struct {
 	Funcs   map[string]ChainFunc
@@ -894,6 +1001,7 @@ type Chain struct {
 
 type ChainFunc struct {
 	Static, Private bool
+	PrototypeOnly   bool
 	Off             uint32
 	DefinedIn       string
 }
@@ -934,9 +1042,17 @@ func (ix *Index) chainLocked(libPath string, visiting map[string]bool) *Chain {
 		// can explain *why* a call fails instead of just "not defined".
 		// Everything below a `private inherit` is call_other-invisible
 		// to inheritors too (DGD excludes it from the symbol table).
+		// A prototype from one sibling module never clobbers another
+		// sibling's definition — any definition in the composed program
+		// satisfies every prototype of the same name.
 		for name, fn := range sub.Funcs {
 			if ref.Private {
 				fn.Private = true
+			}
+			if fn.PrototypeOnly {
+				if old, ok := ch.Funcs[name]; ok && !old.PrototypeOnly {
+					continue
+				}
 			}
 			ch.Funcs[name] = fn
 		}
@@ -944,9 +1060,16 @@ func (ix *Index) chainLocked(libPath string, visiting map[string]bool) *Chain {
 	}
 	delete(visiting, libPath)
 	for name, fi := range obj.Funcs {
+		if fi.PrototypeOnly {
+			// An inherited definition satisfies a local prototype.
+			if old, ok := ch.Funcs[name]; ok && !old.PrototypeOnly {
+				continue
+			}
+		}
 		ch.Funcs[name] = ChainFunc{
 			Static: fi.Static, Private: fi.Private,
-			Off: fi.Off, DefinedIn: libPath,
+			PrototypeOnly: fi.PrototypeOnly,
+			Off:           fi.Off, DefinedIn: libPath,
 		}
 	}
 	ch.Objects = append(ch.Objects, libPath)

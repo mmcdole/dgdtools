@@ -1,5 +1,8 @@
 /* Base object for the fixture lib. */
 
+public int visible_fn();        /* forward decl, defined below: fine */
+static void never_defined();    /* prototype with no definition anywhere */
+
 private int _uses;
 
 static void
