@@ -255,8 +255,10 @@ var staticAutosaveVar = &lint.Analyzer{
 	Name: "static-autosave-var",
 	Doc: "a static global variable in an auto-saving object — static " +
 		"variables are excluded from save_object/restore_object, so this " +
-		"state silently does not persist",
-	Tier: 2, Default: true, DefaultSeverity: diag.Warning,
+		"state silently does not persist. Off by default: static is also " +
+		"the deliberate idiom for runtime-only state, so enable this when " +
+		"reviewing specifier changes, not as a standing audit",
+	Tier: 2, Default: false, DefaultSeverity: diag.Warning,
 	Run: func(p *lint.Pass) {
 		if p.Object == nil || !p.Object.AutoSave {
 			return

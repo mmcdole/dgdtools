@@ -54,7 +54,7 @@ func shortPath(p string) string {
 }
 
 func TestTier2SeededBugs(t *testing.T) {
-	ds := runLint(t, minilibConfig(), nil, nil)
+	ds := runLint(t, minilibConfig(), []string{"static-autosave-var"}, nil)
 	got := keys(ds)
 
 	// Every seeded bug is found.
@@ -120,7 +120,7 @@ func TestDisableAndPathRules(t *testing.T) {
 
 	cfg = minilibConfig()
 	cfg.Lint.PathRules = []config.PathRule{{Paths: []string{"daemons/**"}, Disable: []string{"static-autosave-var"}}}
-	ds = runLint(t, cfg, nil, nil)
+	ds = runLint(t, cfg, []string{"static-autosave-var"}, nil)
 	for _, d := range ds {
 		if d.Rule == "static-autosave-var" {
 			assert.NotContains(t, d.Path, "saver.c")
