@@ -1,8 +1,8 @@
 // Package rules registers dgdlint's built-in analyzers.
 //
 // Tier 1 rules see one file at a time. Tier 2 rules additionally see the
-// cross-file index and only report what the index can prove: unresolvable
-// targets and partial inherit chains are skipped, never guessed at.
+// cross-file index and only report what the index can prove: unknown facts
+// from unresolvable targets and partial inherit chains are never guessed at.
 package rules
 
 import (
@@ -100,99 +100,6 @@ var missingVisibility = &lint.Analyzer{
 	},
 }
 
-var lifecycleChain = &lint.Analyzer{
-	Name: "lifecycle-chain",
-	Doc: "a lifecycle function (default: create) in an inheriting object " +
-		"never chains ::<name>(); configure rules.lifecycle-chain.names",
-	Tier: 1, Default: true, DefaultSeverity: diag.Warning,
-	Run: func(p *lint.Pass) {
-		names := p.Settings.Names
-		if len(names) == 0 {
-			names = []string{"create"}
-		}
-		inherits := false
-		for i := range p.Structure.Items {
-			if p.Structure.Items[i].Kind == structure.Inherit {
-				inherits = true
-				break
-			}
-		}
-		if !inherits {
-			return // base objects have nothing to chain
-		}
-		p.Structure.Funcs(func(it *structure.Item) bool {
-			if it.Kind != structure.FuncDef || it.NameIdx < 0 {
-				return true
-			}
-			name := string(p.File.Text(p.File.Tokens[it.NameIdx]))
-			if !contains(names, name) {
-				return true
-			}
-			if !parentDefines(p, name) {
-				return true // nothing to chain: no parent defines it
-			}
-			if !chainsCall(p.File, it, name) {
-				p.Reportf(p.File.Tokens[it.NameIdx].Off,
-					"%s() does not chain ::%s()", name, name)
-			}
-			return true
-		})
-	},
-}
-
-// parentDefines reports whether any inherited chain defines the function —
-// chaining ::name() is only expected when a parent actually has one.
-// Without an index (or with unresolvable inherits) it assumes yes, keeping
-// the tier-1-only behavior.
-func parentDefines(p *lint.Pass, name string) bool {
-	if p.Index == nil || p.Object == nil {
-		return true
-	}
-	for _, ref := range p.Object.Inherits {
-		if !ref.Resolved {
-			return true // cannot verify: keep the old behavior
-		}
-		sub := p.Index.Chain(ref.Path)
-		if sub.Partial {
-			return true
-		}
-		if _, ok := sub.Funcs[name]; ok {
-			return true
-		}
-	}
-	return false
-}
-
-func contains(list []string, s string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
-}
-
-// chainsCall reports whether the function body contains ::name( or
-// label::name(.
-func chainsCall(f *token.File, it *structure.Item, name string) bool {
-	for i := it.BodyL; i <= it.BodyR && i < len(f.Tokens); i++ {
-		if f.Tokens[i].Kind != token.ColonColon {
-			continue
-		}
-		for j := i + 1; j < len(f.Tokens) && j <= it.BodyR; j++ {
-			t := f.Tokens[j]
-			if t.Kind.IsTrivia() {
-				continue
-			}
-			if t.Kind == token.Ident && string(f.Text(t)) == name {
-				return true
-			}
-			break
-		}
-	}
-	return false
-}
-
 var unformatted = &lint.Analyzer{
 	Name: "unformatted",
 	Doc:  "file is not dgdfmt-formatted",
@@ -222,6 +129,210 @@ var unformatted = &lint.Analyzer{
 }
 
 // --- tier 2 --------------------------------------------------------------
+
+var lifecycleChain = &lint.Analyzer{
+	Name: "lifecycle-chain",
+	Doc: "a local lifecycle function (default: create) omits calls to " +
+		"resolved explicit parent implementations; multiple parents require " +
+		"labeled calls, with suppressions available for intentional diamonds; " +
+		"configure rules.lifecycle-chain.names",
+	Tier: 2, Default: true, DefaultSeverity: diag.Warning,
+	Run: func(p *lint.Pass) {
+		if p.Index == nil || p.Object == nil {
+			return
+		}
+		names := p.Settings.Names
+		if len(names) == 0 {
+			names = []string{"create"}
+		}
+		p.Structure.Funcs(func(it *structure.Item) bool {
+			if it.Kind != structure.FuncDef || it.NameIdx < 0 {
+				return true
+			}
+			name := string(p.File.Text(p.File.Tokens[it.NameIdx]))
+			if !contains(names, name) {
+				return true
+			}
+			checkLifecycleChain(p, it, name)
+			return true
+		})
+	},
+}
+
+type lifecycleParent struct {
+	labels []string
+	path   string
+}
+
+func lifecycleParents(p *lint.Pass, name string) []lifecycleParent {
+	var parents []lifecycleParent
+	seen := map[string]int{}
+	for _, ref := range p.Object.Inherits {
+		if !ref.Resolved {
+			continue
+		}
+		fn, ok := p.Index.Chain(ref.Path).Funcs[name]
+		if !ok || fn.PrototypeOnly || fn.Private {
+			continue
+		}
+		if i, ok := seen[ref.Path]; ok {
+			if ref.Label != "" {
+				parents[i].labels = append(parents[i].labels, ref.Label)
+			}
+			continue // the same inherited program is one implementation
+		}
+		parent := lifecycleParent{path: ref.Path}
+		if ref.Label != "" {
+			parent.labels = []string{ref.Label}
+		}
+		seen[ref.Path] = len(parents)
+		parents = append(parents, parent)
+	}
+	return parents
+}
+
+type lifecycleCalls struct {
+	unqualified bool
+	labels      map[string]bool
+	labelOrder  []string
+}
+
+// collectLifecycleCalls recognizes actual ::name() and label::name() calls;
+// a name reference without the following '(' does not satisfy the rule.
+func collectLifecycleCalls(f *token.File, it *structure.Item, name string) lifecycleCalls {
+	calls := lifecycleCalls{labels: map[string]bool{}}
+	for i := it.BodyL; i <= it.BodyR && i < len(f.Tokens); i++ {
+		if f.Tokens[i].Kind != token.ColonColon {
+			continue
+		}
+		nameIdx := nextSignificant(f, i+1, it.BodyR)
+		if nameIdx < 0 || f.Tokens[nameIdx].Kind != token.Ident ||
+			string(f.Text(f.Tokens[nameIdx])) != name {
+			continue
+		}
+		callIdx := nextSignificant(f, nameIdx+1, it.BodyR)
+		if callIdx < 0 || f.Tokens[callIdx].Kind != token.LParen {
+			continue
+		}
+		prevIdx := previousSignificant(f, i-1, it.BodyL)
+		if prevIdx >= 0 && f.Tokens[prevIdx].Kind == token.Ident {
+			label := string(f.Text(f.Tokens[prevIdx]))
+			if !calls.labels[label] {
+				calls.labelOrder = append(calls.labelOrder, label)
+			}
+			calls.labels[label] = true
+		} else {
+			calls.unqualified = true
+		}
+	}
+	return calls
+}
+
+func nextSignificant(f *token.File, start, end int) int {
+	for i := start; i <= end && i < len(f.Tokens); i++ {
+		if !f.Tokens[i].Kind.IsTrivia() {
+			return i
+		}
+	}
+	return -1
+}
+
+func previousSignificant(f *token.File, start, end int) int {
+	for i := start; i >= end && i >= 0; i-- {
+		if !f.Tokens[i].Kind.IsTrivia() {
+			return i
+		}
+	}
+	return -1
+}
+
+func checkLifecycleChain(p *lint.Pass, it *structure.Item, name string) {
+	parents := lifecycleParents(p, name)
+	if len(parents) == 0 {
+		return
+	}
+	calls := collectLifecycleCalls(p.File, it, name)
+	if len(parents) == 1 {
+		parent := parents[0]
+		if calls.unqualified || anyLifecycleLabelCalled(calls, parent.labels) ||
+			(len(parent.labels) == 0 && len(calls.labelOrder) > 0) {
+			return
+		}
+		suggestion := "::" + name + "()"
+		for _, label := range parent.labels {
+			suggestion += " or " + label + "::" + name + "()"
+		}
+		p.Reportf(p.File.Tokens[it.NameIdx].Off,
+			"%s() overrides inherited %s::%s() but does not chain it; call %s",
+			name, parent.path, name, suggestion)
+		return
+	}
+
+	knownLabels := map[string]bool{}
+	for _, parent := range parents {
+		for _, label := range parent.labels {
+			knownLabels[label] = true
+		}
+	}
+	var fallbackLabels []string
+	for _, label := range calls.labelOrder {
+		if !knownLabels[label] {
+			fallbackLabels = append(fallbackLabels, label)
+		}
+	}
+
+	var unlabeled, missing []string
+	for _, parent := range parents {
+		if len(parent.labels) == 0 {
+			unlabeled = append(unlabeled, parent.path)
+			continue
+		}
+		if !anyLifecycleLabelCalled(calls, parent.labels) {
+			missing = append(missing, parent.labels[0]+"::"+name+"()")
+		}
+	}
+	// The structure scanner takes one preprocessor branch. In old portable
+	// source that branch may contain unlabeled MudOS inherits while the body
+	// uses labels declared in the DGD alternative. Match otherwise-unclaimed
+	// label calls to those parents in source order; DGD itself validates that
+	// the labels are real.
+	if len(fallbackLabels) >= len(unlabeled) {
+		unlabeled = nil
+	} else {
+		unlabeled = unlabeled[len(fallbackLabels):]
+	}
+	if len(unlabeled) == 0 && len(missing) == 0 {
+		return
+	}
+	var details []string
+	if len(unlabeled) > 0 {
+		details = append(details, "missing labeled "+name+"() call for "+strings.Join(unlabeled, ", "))
+	}
+	if len(missing) > 0 {
+		details = append(details, "missing "+strings.Join(missing, ", "))
+	}
+	p.Reportf(p.File.Tokens[it.NameIdx].Off,
+		"%s() does not chain all inherited implementations: %s",
+		name, strings.Join(details, "; "))
+}
+
+func anyLifecycleLabelCalled(calls lifecycleCalls, labels []string) bool {
+	for _, label := range labels {
+		if calls.labels[label] {
+			return true
+		}
+	}
+	return false
+}
+
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
 
 var callableNotFound = &lint.Analyzer{
 	Name: "callable-not-found",

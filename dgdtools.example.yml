@@ -63,6 +63,7 @@ lint:
   disable: []
   rules:
     raw-inherit-path: { severity: warning, deny: ["/std/", "/obj/"] }
+    # Resolved explicit parents defining these functions must be chained.
     lifecycle-chain: { names: [create] }
   path_rules:
     - paths: ["legacy/**"]

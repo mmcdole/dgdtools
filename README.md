@@ -3,8 +3,8 @@
 Source tooling for the [DGD](https://github.com/dworkin/dgd) dialect of LPC:
 
 - **dgdfmt**, a code formatter in the gofmt tradition
-- **dgdlint**, a linter for the failures the DGD compiler cannot see:
-  string-dispatched calls, missing objects, silent argument mismatches
+- **dgdlint**, a whole-tree linter for DGD compiler blind spots and broken
+  source dependencies otherwise discovered only when an object loads
 - **dgdcmp**, which compares two files by significant token stream to
   prove a diff is formatting-only
 
@@ -103,6 +103,7 @@ lint:
   disable: []
   rules:
     raw-inherit-path: { severity: warning, deny: ["/std/", "/obj/"] }
+    # Resolved explicit parents defining these functions must be chained.
     lifecycle-chain: { names: [create] }
   path_rules:
     - paths: ["legacy/**"]
@@ -186,6 +187,11 @@ can prove: unknown targets and unresolvable chains are skipped, and a
 module's callbacks are checked against its inheritors and includers
 before being called missing.
 
+Most rules target code that compiles but fails or silently misbehaves at
+runtime. `include-not-found` is the deliberate exception: whole-tree indexing
+can prove a broken source dependency before DGD happens to load that object.
+dgdlint is not a replacement for DGD's ordinary syntax and type diagnostics.
+
 | Rule | Tier | Default | Finds |
 |---|---|---|---|
 | `callable-not-found` | 2 | on | string-referenced function (`obj->fn()`, `call_other`, `call_out`, registrars) missing from the target's inherit chain; the call silently returns nil |
@@ -193,16 +199,61 @@ before being called missing.
 | `undefined-prototype` | 2 | on | function declared but never defined in the chain, and called; a runtime error |
 | `target-object-missing` | 2 | on | literal object path (inherit, `clone_object`, call target) with no backing file; a runtime load error |
 | `callback-arity` | 2 | on | dispatched call passing an argument count the target cannot accept; silently padded or dropped under non-strict typechecking |
-| `include-not-found` | 2 | on | `#include` target that cannot be found; a compile error at load |
-| `assignment-in-condition` | 1 | on | bare assignment in an `if`/`while`/`for` condition; `((x = y))` marks intent and is accepted |
+| `include-not-found` | 2 | on | whole-tree dependency preflight for a missing `#include` target; a compile error when the object loads |
+| `assignment-in-condition` | 1 | on | semantic warning for assigning a bare constant or an unparenthesized `&&`/`||` result in a condition; ordinary assign-and-test is accepted |
 | `no-effect-statement` | 1 | on | comparison used as a statement (`x == 1;`) |
 | `sscanf-format` | 1 | on | more variables supplied than `%`-conversions in the format string |
-| `lifecycle-chain` | 1 | on | lifecycle function (default `create`) in an inheriting object that never chains `::create()` |
+| `lifecycle-chain` | 2 | on | local lifecycle function (default `create`) omits calls to resolved explicit parent implementations |
 | `static-autosave-var` | 2 | off | `static` global in an auto-saving object; excluded from `save_object`, so the state does not persist |
 | `unresolved-inherit` | 2 | off | inherit path the macro evaluator could not resolve |
 | `raw-inherit-path` | 1 | off | inherit using a literal path string where the lib mandates macros |
 | `missing-visibility` | 1 | off | function with no visibility specifier |
 | `unformatted` | 1 | off | file that is not dgdfmt-formatted |
+
+### Conditional assignments
+
+Assign-and-test is an established LPC idiom and is accepted:
+
+```c
+if (sz = sizeof(items)) {              /* accepted */
+    process(items);
+}
+if (sz = 0) {                          /* warning: probably == */
+    reset_items();
+}
+if (sz = load_items() && ready) {      /* warning: sz receives 0 or 1 */
+    process(items);
+}
+if ((sz = load_items()) && ready) {    /* accepted: intent is explicit */
+    process(items);
+}
+```
+
+Compile-invalid assignment targets such as `!ob = present(...)` are left to
+DGD rather than being duplicated as lint rules.
+
+### Lifecycle chaining
+
+The rule is proof-based: files with no explicit inherit, parents without the
+configured lifecycle function, and unresolved parents with no known definition
+are skipped. With multiple defining parents, label and chain each one:
+
+```c
+inherit room I_ROOM;
+inherit commands I_COMMAND;
+
+static void create() {
+    room::create();
+    commands::create();
+}
+```
+
+This is a warning-level safety heuristic, not an absolute rule. In a diamond,
+both direct parents may call the same shared grand-base initializer; DGD
+deduplicates the inherited program, not explicit calls, so chaining both can
+run that initializer twice. Use a targeted `lifecycle-chain` suppression with
+a nearby rationale when omitting a call is intentional. The rule does not try
+to detect diamonds or enforce call order.
 
 Suppress findings inline from any comment:
 
