@@ -7,7 +7,12 @@ Source tooling for the [DGD](https://github.com/dworkin/dgd) dialect of LPC:
 - **dgdcmp** — proves a diff is formatting-only by comparing significant
   token streams (whitespace and comments ignored, everything else
   byte-exact). Also a lexer debugger (`-dump`).
-- **dgdlint** — a linter (under construction).
+- **dgdlint** — a linter in the go/analysis tradition: named rules,
+  per-rule config and severities, inline suppressions, JSON output. Its
+  tier-2 rules build a cross-file index of the whole lib to verify
+  string-referenced calls — in DGD every cross-object call is late-bound
+  by name and a missing function silently returns nil, so this is the
+  missing-function check the compiler never does.
 
 Existing LPC tooling targets LDMud/FluffOS and mishandles DGD syntax —
 `({ })` / `([ ])` literals, `<-` instanceof, `..` ranges, labeled inherits,
@@ -42,7 +47,25 @@ dgdfmt -d file.c           # show a diff
 dgdfmt -w lib/             # rewrite in place (gated)
 dgdcmp old.c new.c         # exit 0 iff the diff is formatting-only
 dgdcmp -dump file.c        # token stream dump
+dgdlint -rules             # list rules (tier, default, severity)
+dgdlint d/MyDomain         # lint with dgdtools.yml found upward from cwd
+dgdlint -f json ...        # machine-readable output
 ```
+
+Configuration lives in `dgdtools.yml` (see `dgdtools.example.yml`):
+dialect flags, exclude globs, format policy, and everything the linter
+needs to know about your mudlib — include dirs, the auto object, callback
+registrars, autosave markers. Rules with mudlib-specific semantics ship
+disabled by default. Suppress inline with
+`/* dgdlint:disable-next-line rule-name */` (also `disable-line`, and
+file-scoped `disable`/`enable` with an explicit rule list).
+
+Notable semantics encoded in the tier-2 rules (verified against DGD's
+interpreter source): call_other reaches static functions only on the same
+object; private functions (and anything below a `private inherit`) are
+never call_other-reachable; textually `#include`d code files count as part
+of the includer; a module's self-registered callbacks are checked against
+its inheritors and includers before being reported missing.
 
 ## Testing
 

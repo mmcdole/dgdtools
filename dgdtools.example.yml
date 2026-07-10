@@ -1,0 +1,50 @@
+# dgdtools.yml — shared configuration for dgdfmt and dgdlint.
+# Place at your project root; every field is optional. Values shown are
+# examples for a classic DGD mudlib.
+
+dialect:
+  slash_slash: true          # // comments (DGD SLASHSLASH build flag)
+  closures: false            # `function` keyword (DGD CLOSURES build flag)
+
+root: .                      # filesystem dir that is the lib's "/"
+
+exclude:
+  - "players/**"
+  - "**/old/**"
+  - "**/OLD/**"
+  - "**/*.retired"
+  - "**/*.pre*"
+
+format:
+  indent: 4
+  line_endings: preserve     # preserve | lf | crlf
+  max_blank_lines: 2
+
+lint:
+  # Mirror the driver config so #include and inherit macros resolve.
+  include_dirs: ["/dgd/include", "/std/include"]
+  include_file: "/dgd/include/Std.h"   # force-included everywhere
+  auto_objects: ["/dgd/lib/object"]    # implicitly inherited by everything
+
+  # Identifiers accepted in specifier position (empty visibility macros).
+  specifier_macros: [public]
+
+  # Functions whose string argument names a callback on this_object().
+  # call_other and call_out are built in; value = 0-based argument index.
+  call_registry:
+    store_fp: 0
+    add_action: 0
+
+  # Function/macro names that mark an object as auto-saving.
+  autosave_markers: [set_auto_save]
+
+  enable: []                 # e.g. [raw-inherit-path, missing-visibility]
+  disable: []
+  rules:
+    raw-inherit-path: { severity: warning, deny: ["/std/", "/obj/"] }
+    callable-not-found: { severity: error }
+    lifecycle-chain: { names: [create] }
+  path_rules:
+    - paths: ["legacy/**"]
+      disable: [lifecycle-chain]
+  fail_on: error             # exit 1 at this severity or above
