@@ -32,6 +32,7 @@ var (
 	write       = flag.Bool("w", false, "write result to (source) file instead of stdout")
 	indent      = flag.Int("indent", 4, "spaces per indentation level")
 	lineEndings = flag.String("line-endings", "preserve", "newline policy: preserve, lf, or crlf")
+	maxBlank    = flag.Int("max-blank-lines", 2, "maximum consecutive blank lines")
 	noSlash     = flag.Bool("no-slash-slash", false, "disable // line comments (DGD without SLASHSLASH)")
 	closures    = flag.Bool("closures", false, "reserve 'function' as a keyword (DGD with CLOSURES)")
 	showVersion = flag.Bool("version", false, "print version")
@@ -98,7 +99,7 @@ func main() {
 }
 
 func options() (format.Options, lexer.Dialect, error) {
-	o := format.Options{Indent: *indent}
+	o := format.Options{Indent: *indent, MaxBlankLines: *maxBlank}
 	switch *lineEndings {
 	case "preserve":
 		o.LineEndings = format.Preserve
