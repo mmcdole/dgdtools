@@ -417,6 +417,11 @@ func (p *printer) tokenIndex(t token.Token) int {
 // shouldCuddle reports whether next, currently on its own line, should be
 // joined to the previous line: control-flow '{' after ')', else/do/try
 // braces, and 'else' after '}'.
+//
+// Cuddling only fires on Allman-style layout — a '{' whose block content
+// starts on the next line, and an 'else' after a '}' alone on its line.
+// One-line brace blocks (`{ msg(); }`) keep their own lines; joining them
+// would cascade an if/else-if ladder into one enormous line.
 func (p *printer) shouldCuddle(next token.Token, nextIdx int) bool {
 	switch next.Kind {
 	case token.LBrace:
@@ -425,12 +430,40 @@ func (p *printer) shouldCuddle(next token.Token, nextIdx int) bool {
 		}
 		switch p.prevSig {
 		case token.RParen, token.KwElse, token.KwDo, token.KwTry:
-			return true
+			return p.newlineAfter(nextIdx)
 		}
 	case token.KwElse:
-		return p.prevSig == token.RBrace
+		return p.prevSig == token.RBrace && p.newlineBefore(p.prevSigIdx)
 	}
 	return false
+}
+
+// newlineAfter reports whether a newline separates the token at idx from
+// the next significant token.
+func (p *printer) newlineAfter(idx int) bool {
+	for i := idx + 1; i < len(p.f.Tokens); i++ {
+		switch k := p.f.Tokens[i].Kind; {
+		case k == token.Newline:
+			return true
+		case !k.IsTrivia():
+			return false
+		}
+	}
+	return false
+}
+
+// newlineBefore reports whether a newline separates the token at idx from
+// the previous significant token (i.e. it starts its source line).
+func (p *printer) newlineBefore(idx int) bool {
+	for i := idx - 1; i >= 0; i-- {
+		switch k := p.f.Tokens[i].Kind; {
+		case k == token.Newline:
+			return true
+		case !k.IsTrivia():
+			return false
+		}
+	}
+	return true
 }
 
 func (p *printer) writeNewline(orig []byte) {
