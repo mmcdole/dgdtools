@@ -79,6 +79,13 @@ func TestTier2SeededBugs(t *testing.T) {
 		assert.NotContains(t, k, "thing.c:3", "forward decl with definition is fine")
 	}
 
+	// A definition whose body splits brackets across #ifdef/#else must not
+	// be lost (its prototype would otherwise read as undefined), and a
+	// two-argument registrar registration is never arity-checked.
+	for _, k := range got {
+		assert.NotContains(t, k, "cond.c", "conditional-branch fixture must be clean")
+	}
+
 	// Compiler-blindspot rules (vet.c fixture).
 	assert.Contains(t, got, "include-not-found vet.c:1")
 	assert.Contains(t, got, "assignment-in-condition vet.c:12", "if (x = 1)")

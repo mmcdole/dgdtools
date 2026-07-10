@@ -116,6 +116,41 @@ func TestHeaderComments(t *testing.T) {
 	assert.False(t, fs.Items[0].HeaderComments)
 }
 
+func TestConditionalBranchBrackets(t *testing.T) {
+	// Brackets split across #ifdef/#else branches are balanced within one
+	// branch only; the scanner takes the first branch, so both this
+	// definition and the one after it must be recognized.
+	fs := analyze(t, `void later();
+
+void
+cross()
+{
+    int i;
+#ifdef __DGD__
+    if (sizeof(files[0]) &&
+#else
+    if (sizeof(files) &&
+#endif
+        i > 0) {
+        i = 1;
+    }
+}
+
+void
+later()
+{
+}
+`)
+	var defs []string
+	fs.Funcs(func(it *Item) bool {
+		if it.Kind == FuncDef {
+			defs = append(defs, name(fs, it))
+		}
+		return true
+	})
+	assert.Equal(t, []string{"cross", "later"}, defs)
+}
+
 func TestNoPanicOnGarbage(t *testing.T) {
 	for _, src := range []string{
 		"", ";;;", "int", "void f(", "}}}}", "int x = ({ ([",

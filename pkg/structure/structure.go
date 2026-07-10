@@ -132,12 +132,66 @@ type scanner struct {
 	i   int   // cursor into sig
 }
 
+// collect gathers significant tokens, taking the FIRST branch of every
+// preprocessor conditional and suppressing #else/#elif branches. Code that
+// splits brackets across branches (`if (x &&` under #ifdef, `if (y &&`
+// under #else, shared continuation after #endif) is balanced within any
+// single branch but not across both; counting one branch keeps the
+// bracket-matching sound. On DGD the first branch of the ubiquitous
+// `#ifdef __DGD__` is also the branch that actually compiles.
 func (s *scanner) collect() {
+	depth := 0     // nesting of preprocessor conditionals
+	suppress := -1 // depth at which an inactive branch started; -1 = none
 	for i, t := range s.f.Tokens {
-		if !t.Kind.IsTrivia() && t.Kind != token.EOF {
+		if t.Kind == token.Directive {
+			switch directiveKind(s.f.Text(t)) {
+			case "if":
+				depth++
+			case "else":
+				if suppress < 0 {
+					suppress = depth
+				}
+			case "endif":
+				if suppress == depth {
+					suppress = -1
+				}
+				if depth > 0 {
+					depth--
+				}
+			}
+			if suppress >= 0 {
+				continue
+			}
 			s.sig = append(s.sig, i)
+			continue
 		}
+		if suppress >= 0 || t.Kind.IsTrivia() || t.Kind == token.EOF {
+			continue
+		}
+		s.sig = append(s.sig, i)
 	}
+}
+
+// directiveKind classifies a preprocessor directive's conditional role:
+// "if" (#if/#ifdef/#ifndef), "else" (#else/#elif), "endif", or "".
+func directiveKind(text []byte) string {
+	i := 1 // past '#'
+	for i < len(text) && (text[i] == ' ' || text[i] == '\t') {
+		i++
+	}
+	j := i
+	for j < len(text) && text[j] >= 'a' && text[j] <= 'z' {
+		j++
+	}
+	switch string(text[i:j]) {
+	case "if", "ifdef", "ifndef":
+		return "if"
+	case "else", "elif":
+		return "else"
+	case "endif":
+		return "endif"
+	}
+	return ""
 }
 
 // kind returns the kind of the significant token at cursor offset d.

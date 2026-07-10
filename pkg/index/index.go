@@ -635,6 +635,9 @@ func (ix *Index) scanCalls(obj *ObjectInfo) {
 								Func: fn2, Registrar: name, Kind: CrossObject,
 								Target: TargetPath, Off: fnTok2.Off,
 								TargetPath: normalizeLibPath(fn, path.Dir(obj.LibPath)),
+								// Registration site: the callback's real
+								// arguments arrive at fire time.
+								NArgs: -1,
 							})
 						}
 					}
