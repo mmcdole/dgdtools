@@ -80,6 +80,21 @@ func TestControlFlowCuddling(t *testing.T) {
 	assert.Equal(t, want, fmtSrc(t, in, Options{}))
 }
 
+func TestNoCuddleCascade(t *testing.T) {
+	// An if/else-if ladder written with one-line brace blocks on their own
+	// lines must keep that layout. Cuddling used to chain-join the whole
+	// ladder (") {" then "} else" then ...) into one enormous line —
+	// found on a real corpus file that gained a 529-column line.
+	in := "void\nf()\n{\n    if (a)\n    { m1(); }\n    else if (b)\n    { m2(); }\n    else\n    { m3(); }\n}\n"
+	assert.Equal(t, in, fmtSrc(t, in, Options{}))
+
+	// The '}' of a multi-line block is alone on its line: else still
+	// cuddles there, and a following one-line block still keeps its line.
+	in = "void\nf()\n{\n    if (a) {\n        m1();\n    }\n    else if (b)\n    { m2(); }\n}\n"
+	want := "void\nf()\n{\n    if (a) {\n        m1();\n    } else if (b)\n    { m2(); }\n}\n"
+	assert.Equal(t, want, fmtSrc(t, in, Options{}))
+}
+
 func TestSwitchFrames(t *testing.T) {
 	in := "void\nf()\n{\nswitch (x) {\ncase 0:  return;\ncase 1..5:\nbreak;\ndefault:\nbreak;\n}\n}\n"
 	want := "void\nf()\n{\n    switch (x) {\n    case 0: return;\n    case 1..5:\n        break;\n    default:\n        break;\n    }\n}\n"
