@@ -315,6 +315,12 @@ need the lib root (the directory that is `/` to the driver).
 9. **A file named explicitly is linted even if `exclude` matches it**;
    excludes prune directory walks (ruff's default, and what a pre-commit
    hook needs).
+10. **A linked folder is part of the lib, named by its path there**, as
+    TypeScript's `preserveSymlinks` names a module: the driver never sees
+    the host's link. Walks (`vfs.FS.WalkDir`, `fileset.Tree.Walk`) enter
+    links to directories outside the lib; a link into the lib, or above
+    it, is not entered (the files are walked once, by their own names),
+    and loops are passed over. `exclude` matches the lib path.
 
 ## 4. Configuration
 

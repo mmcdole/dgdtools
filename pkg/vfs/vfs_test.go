@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -137,6 +138,45 @@ func TestOverlayWalkOverRealDirectories(t *testing.T) {
 		return fs.SkipAll
 	}))
 	assert.Equal(t, 1, stopped, "SkipAll ends the walk, shadowed files included")
+}
+
+func TestOSWalksLinks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("making a link needs a privilege on Windows")
+	}
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	for _, f := range []string{"lib/std/a.c", "out/b.c"} {
+		p := filepath.Join(dir, filepath.FromSlash(f))
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		require.NoError(t, os.WriteFile(p, nil, 0o644))
+	}
+	for link, target := range map[string]string{"lib/out": "out", "out/loop": "out", "out/up": "", "lib/gone": "none", "lib/f.c": "out/b.c"} {
+		require.NoError(t, os.Symlink(filepath.Join(dir, target), filepath.Join(dir, filepath.FromSlash(link))))
+	}
+	lib := filepath.Join(dir, "lib")
+	assert.Equal(t, []string{"/", "/f.c", "/gone", "/out/", "/out/b.c", "/std/", "/std/a.c"}, walk(t, OS{}, lib),
+		"a link to a directory is entered, a loop is passed over, a link to a file or to nothing is as it was")
+	assert.Equal(t, []string{"/", "/b.c"}, walk(t, OS{}, filepath.Join(lib, "out")), "a root that is a link is entered")
+	assert.Equal(t, []string{"/", "/f.c", "/gone", "/std/", "/std/a.c"}, walk(t, OS{}, lib, "/out"), "SkipDir skips a link")
+	var mode fs.FileMode
+	require.NoError(t, OS{}.WalkDir(lib, func(p string, d fs.DirEntry, err error) error {
+		if d.Name() == "out" {
+			mode = d.Type()
+		}
+		return nil
+	}))
+	assert.Equal(t, fs.ModeDir|fs.ModeSymlink, mode)
+
+	real, err := OS{}.RealPath(filepath.Join(lib, "out", "b.c"))
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(dir, "out", "b.c"), real)
+	o := NewOverlay(OS{})
+	o.Set(filepath.Join(lib, "out", "new.c"), nil)
+	real, err = o.RealPath(filepath.Join(lib, "out", "new.c"))
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(dir, "out", "new.c"), real, "a file only the overlay has is resolved as far as the disk goes")
+	assert.Contains(t, walk(t, o, lib), "/out/new.c")
 }
 
 func indexOf(list []string, s string) int {

@@ -21,8 +21,12 @@ type FS interface {
 	Exists(path string) bool
 	// IsDir reports whether path names a directory.
 	IsDir(path string) bool
-	// WalkDir walks the tree rooted at root like filepath.WalkDir.
+	// WalkDir walks the tree rooted at root like filepath.WalkDir, but
+	// enters links to directories (see OS.WalkDir).
 	WalkDir(root string, fn fs.WalkDirFunc) error
+	// RealPath returns path with the links in it resolved: path itself
+	// on a file system that has none.
+	RealPath(path string) (string, error)
 }
 
 // OS is the real filesystem.
@@ -40,7 +44,112 @@ func (OS) IsDir(path string) bool {
 	return err == nil && st.IsDir()
 }
 
-func (OS) WalkDir(root string, fn fs.WalkDirFunc) error { return filepath.WalkDir(root, fn) }
+func (OS) RealPath(path string) (string, error) { return filepath.EvalSymlinks(path) }
+
+// WalkDir walks the tree rooted at root like filepath.WalkDir, except
+// that a link to a directory (a symbolic link, or a junction on Windows)
+// is walked as the directory it leads to, under the link's own path.
+// Its entry is a directory whose Type has fs.ModeSymlink, and fn can
+// skip it with fs.SkipDir like any other; root may be such a link too.
+// A link that leads back to a directory the walk is in (a loop) is
+// passed over.
+func (OS) WalkDir(root string, fn fs.WalkDirFunc) error {
+	info, err := os.Lstat(root)
+	if err != nil {
+		err = fn(root, nil, err)
+	} else {
+		var d fs.DirEntry = fs.FileInfoToDirEntry(info)
+		real := root
+		if l, ok := link(root, d); ok {
+			d, real = l, l.target
+		} else if r, err := filepath.EvalSymlinks(root); err == nil {
+			real = r
+		}
+		err = walkDir(root, d, fn, []string{real})
+	}
+	if err == fs.SkipDir || err == fs.SkipAll {
+		return nil
+	}
+	return err
+}
+
+// walkDir is filepath.WalkDir's walk, entering links. chain is the real
+// path of each directory from the root down to path's own.
+func walkDir(path string, d fs.DirEntry, fn fs.WalkDirFunc, chain []string) error {
+	if err := fn(path, d, nil); err != nil || !d.IsDir() {
+		if err == fs.SkipDir && d.IsDir() {
+			err = nil
+		}
+		return err
+	}
+	dirs, err := os.ReadDir(path)
+	if err != nil {
+		if err = fn(path, d, err); err != nil {
+			if err == fs.SkipDir && d.IsDir() {
+				err = nil
+			}
+			return err
+		}
+	}
+	real := chain[len(chain)-1]
+	for _, d1 := range dirs {
+		path1 := filepath.Join(path, d1.Name())
+		real1 := filepath.Join(real, d1.Name())
+		if l, ok := link(path1, d1); ok {
+			if l.loop(chain) {
+				continue
+			}
+			d1, real1 = l, l.target
+		}
+		if err := walkDir(path1, d1, fn, append(chain[:len(chain):len(chain)], real1)); err != nil {
+			if err == fs.SkipDir {
+				break
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+// linkEntry is the entry of a link to a directory, which a walk enters.
+type linkEntry struct {
+	name   string
+	target string // the directory's real path
+}
+
+func (e *linkEntry) Name() string               { return e.name }
+func (e *linkEntry) IsDir() bool                { return true }
+func (e *linkEntry) Type() fs.FileMode          { return fs.ModeDir | fs.ModeSymlink }
+func (e *linkEntry) Info() (fs.FileInfo, error) { return nil, fs.ErrInvalid }
+
+// loop reports whether the link leads to one of the directories of
+// chain, or to one above: entering it would come back to the link.
+func (e *linkEntry) loop(chain []string) bool {
+	for _, dir := range chain {
+		if dir == e.target || strings.HasPrefix(dir, strings.TrimSuffix(e.target, string(filepath.Separator))+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
+}
+
+// link returns the entry a walk enters for the entry d at path: when d
+// is a link (a symbolic link, or a junction, which Windows reports as
+// irregular) that resolves to a directory. A link to a file is read as
+// the file, and a broken one fails whoever reads it.
+func link(path string, d fs.DirEntry) (*linkEntry, bool) {
+	if t := d.Type(); t&(fs.ModeSymlink|fs.ModeIrregular) == 0 || t.IsDir() {
+		return nil, false
+	}
+	if st, err := os.Stat(path); err != nil || !st.IsDir() {
+		return nil, false
+	}
+	real, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return nil, false
+	}
+	return &linkEntry{name: d.Name(), target: real}, true
+}
 
 // Overlay shadows a base FS with in-memory file contents. It is safe for
 // concurrent use. Set and Delete are how unsaved buffers reach the tools.
@@ -87,6 +196,21 @@ func (o *Overlay) Exists(path string) bool {
 	_, ok := o.m[filepath.Clean(path)]
 	o.mu.RUnlock()
 	return ok || o.base.Exists(path) || o.shadowDir(path)
+}
+
+// RealPath resolves path in the base. A file only the overlay has is
+// resolved as far as the base has its directories.
+func (o *Overlay) RealPath(path string) (string, error) {
+	r, err := o.base.RealPath(path)
+	if err == nil {
+		return r, nil
+	}
+	if dir := filepath.Dir(path); dir != path {
+		if r, err := o.RealPath(dir); err == nil {
+			return filepath.Join(r, filepath.Base(path)), nil
+		}
+	}
+	return "", err
 }
 
 // IsDir reports whether path is a directory in the base or holds a
@@ -224,6 +348,9 @@ func (m Mem) IsDir(path string) bool {
 	}
 	return false
 }
+
+// RealPath returns path: a Mem has no links.
+func (Mem) RealPath(path string) (string, error) { return filepath.Clean(path), nil }
 
 func (m Mem) WalkDir(root string, fn fs.WalkDirFunc) error {
 	root = strings.TrimSuffix(filepath.ToSlash(root), "/")

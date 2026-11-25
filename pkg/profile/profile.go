@@ -455,3 +455,11 @@ func (f *FS) IsDir(p string) bool {
 
 // WalkDir walks the base: stubs are consulted, never linted.
 func (f *FS) WalkDir(root string, fn fs.WalkDirFunc) error { return f.base.WalkDir(root, fn) }
+
+// RealPath resolves a path of the base; a stub has no links.
+func (f *FS) RealPath(p string) (string, error) {
+	if _, ok := f.stub(p); ok {
+		return p, nil
+	}
+	return f.base.RealPath(p)
+}
