@@ -1,7 +1,7 @@
 {
   "name": "dgdtools",
   "displayName": "DGD LPC (dgdtools)",
-  "description": "DGD-dialect LPC: syntax highlighting, and the dgdtools language server (diagnostics as you type, fixes, formatting, navigation, completion, rename) for the language dgdlpc.",
+  "description": "Language support for DGD LPC: highlighting, diagnostics, formatting, navigation, completion and rename.",
   "version": "0.0.1",
   "publisher": "mmcdole",
   "license": "MIT",
