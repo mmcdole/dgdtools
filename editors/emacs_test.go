@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -371,4 +372,83 @@ func TestEmacsEglot(t *testing.T) {
 	assert.Equal(t, []string{"4:6-8 S002", "5:14-19 E002"}, codes(got.First), "%q", got.First)
 	assert.Equal(t, []string{"5:14-19 E002"}, codes(got.Second), "%q", got.Second)
 	assert.Equal(t, strings.Replace(text, "s == ", "s = ", 1), got.Text)
+}
+
+// emacsLinkedSession opens a file of a directory linked into the lib
+// under Eglot, which names it to the server by its real path, and writes
+// what the server said of it, and where it says a definition is, to
+// result.json.
+const emacsLinkedSession = `;;; -*- lexical-binding: t; -*-
+(require 'json)
+(let ((dir (getenv "DGDLPC_DIR")) (out nil))
+  (condition-case err
+      (progn
+        (require 'dgdlpc-mode)
+        (setq eglot-sync-connect t)
+        (add-hook 'dgdlpc-mode-hook #'eglot-ensure)
+        (find-file (expand-file-name "lib/players/knubo/raven.c" dir))
+        (run-hooks 'post-command-hook)
+        (cl-flet ((wait (what cond)
+                    (let ((until (+ (float-time) 20)))
+                      (while (and (not (funcall cond)) (< (float-time) until))
+                        (accept-process-output nil 0.05))
+                      (unless (funcall cond) (error "Waited in vain for %s" what)))))
+          (wait "the server" (lambda () (eglot-current-server)))
+          (push (cons 'uri (eglot-path-to-uri (buffer-file-name))) out)
+          (wait "diagnostics" (lambda () (flymake-diagnostics)))
+          (push (cons 'found (mapcar #'flymake-diagnostic-text (flymake-diagnostics))) out)
+          (goto-char (point-min))
+          (search-forward "weight")
+          (let* ((backend (xref-find-backend))
+                 (defs (xref-backend-definitions backend (xref-backend-identifier-at-point backend))))
+            (push (cons 'definition (mapcar (lambda (x) (xref-location-group (xref-item-location x))) defs)) out))))
+    (error (push (cons 'error (error-message-string err)) out)))
+  (with-temp-file (expand-file-name "result.json" dir)
+    (insert (json-encode out)))
+  (kill-emacs 0))
+`
+
+// TestEmacsEglotLinkedDirectory: a wizard's directory linked into the
+// lib from outside is part of the lib under Eglot, which resolves the
+// link before it names the file to the server.
+func TestEmacsEglotLinkedDirectory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds the command and starts an editor")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("making a link needs a privilege on Windows")
+	}
+	emacs := emacsPath(t)
+	modeDir, err := filepath.Abs(emacsDir)
+	require.NoError(t, err)
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	bin := filepath.Join(dir, "bin", "dgdtools")
+	if out, err := exec.Command("go", "build", "-o", bin, "../cmd/dgdtools").CombinedOutput(); err != nil {
+		t.Fatalf("building the command: %v\n%s", err, out)
+	}
+	writeFile(t, filepath.Join(dir, "lib/dgdtools.yml"), "root: .\n")
+	writeFile(t, filepath.Join(dir, "lib/std/item.c"), "void create() { }\nint weight() { return 1; }\n")
+	writeFile(t, filepath.Join(dir, "outside/knubo/raven.c"), "inherit \"/std/item\";\nvoid create() { }\nint caw() { return weight(); }\n")
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "lib/players"), 0o755))
+	require.NoError(t, os.Symlink(filepath.Join(dir, "outside/knubo"), filepath.Join(dir, "lib/players/knubo")))
+	writeFile(t, filepath.Join(dir, "session.el"), emacsLinkedSession)
+
+	cmd := exec.Command(emacs, "-Q", "--batch", "-L", modeDir, "-l", filepath.Join(dir, "session.el"))
+	cmd.Env = append(os.Environ(), "DGDLPC_DIR="+dir, "PATH="+filepath.Dir(bin)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "%s", out)
+	data, err := os.ReadFile(filepath.Join(dir, "result.json"))
+	require.NoError(t, err, "%s", out)
+	var got struct {
+		Error, URI        string
+		Found, Definition []string
+	}
+	require.NoError(t, json.Unmarshal(data, &got), "%s", data)
+	require.Empty(t, got.Error, "%s", out)
+
+	assert.Equal(t, "file://"+filepath.ToSlash(filepath.Join(dir, "outside/knubo/raven.c")), got.URI, "Eglot names the file by its real path")
+	require.Len(t, got.Found, 1, "%q", got.Found)
+	assert.Contains(t, got.Found[0], "overrides inherited /std/item::create()", "the lib's rules ran")
+	assert.Equal(t, []string{filepath.Join(dir, "lib/std/item.c")}, got.Definition)
 }
