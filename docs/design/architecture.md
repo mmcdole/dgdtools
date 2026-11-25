@@ -299,10 +299,10 @@ need the lib root (the directory that is `/` to the driver).
    `include_file`, `auto_object`, `driver_object` and `typechecking`.
    `driver_config: etc/mud.dgd` reads them instead of asking anyone to
    copy them; `dgdtools profile build` bakes them into a profile
-   (section 10), and a whole-lib lint uses them directly. It is their
-   one source: `dgdtools.yml` has no keys for them (only
-   `dialect.typechecking`, for a lib without its driver config at hand,
-   and that wins). The driver's absolute
+   (section 10), and a whole-lib lint uses them directly. For a lib
+   without its driver config at hand, `dgdtools.yml` can say them in a
+   `driver:` block, whose keys win over the driver config's and the
+   profile's. The driver's absolute
    `directory` is *not* used as the root: it names a path on the
    production host.
 7. **Subdirectory and single-file runs** lint only the named files but
@@ -326,8 +326,8 @@ line are designed in [config.md](config.md). What the linter adds:
   misspelled setting must not be silently ignored.
 - **Project keys and settings.** What the linter resolves references
   against is the project: `root`, `profile`, `lib_path`, `exclude`,
-  `driver_config` (and the driver settings read from it), `dialect`
-  (with `typechecking` and `kfuns`), `relative_object_paths` and
+  `driver_config` (and the driver settings read from it), `driver`,
+  `dialect` (with `kfuns`), `relative_object_paths` and
   `conventions` (`create`,
   `macros: {NAME: expression|empty|specifier|type|string|statement|opaque}`,
   `defines`, the call and object registries, `autosave_markers`,
@@ -1327,8 +1327,11 @@ Details that keep stubs honest:
 - Object-local macros are dropped unless the object's declarations use
   them (a type macro, a path macro in an inherit statement); a `.c` file
   that other files `#include` is treated as a header and keeps its macros.
-- Function bodies, comments, private functions, private variables and
-  anything matching `omit:` never enter a profile. Because private
+- A kept function or global variable keeps the comment hover shows for
+  it (`resolve.Comment`), so hover and completion read it from the stub;
+  a profile built before that has none, and still loads.
+- Function bodies, other comments, private functions, private variables
+  and anything matching `omit:` never enter a profile. Because private
   functions are absent, a call to one in a profiled object is reported as
   "not defined … or is private there" (`callable-not-found`) where the
   whole lib would say "is private" (`static-crossobj`): the same bug under
@@ -1496,10 +1499,10 @@ and the rest stay unknown.
 **Publishing a profile gives anyone who fetches it:** the paths of the
 files in it; the full declarations (names, types, specifiers, parameter
 names) of their non-private functions and global variables, including,
-here, `/secure` daemons and the login objects; and the full text of
-every `#define` in the shared headers (path constants, level constants,
-prompt macros). It publishes no function bodies, comments, private
-functions, private variables or data. Whether that surface may be public
+here, `/secure` daemons and the login objects, with the comment above
+each; and the full text of every `#define` in the shared headers (path
+constants, level constants, prompt macros). It publishes no function
+bodies, other comments, private functions, private variables or data. Whether that surface may be public
 is the lib owner's decision, to be made by reading it: `dgdtools profile
 show NAME` summarizes a profile, `dgdtools profile show NAME
 /std/room.c` prints one stub, and the file is gzipped text (`gzip -dc

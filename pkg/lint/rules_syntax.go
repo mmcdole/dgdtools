@@ -335,7 +335,7 @@ var ruleParamType = &Rule{
 	Explain: "With typechecking >= 1 in the driver config, a function written " +
 		"without a return type is still type-checked, and a parameter without a " +
 		"type is the compile error \"missing type for parameter\". Silent when the " +
-		"typechecking level is unknown (set driver_config).",
+		"typechecking level is unknown (set driver_config, or driver.typechecking).",
 	Default: true, Severity: diag.Error, CompiledOnly: true,
 	Run: func(p *Pass) {
 		if !p.typechecked() {

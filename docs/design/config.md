@@ -76,15 +76,17 @@ The top level holds the project keys; `lint:` and `format:` hold
 settings and nothing else. The split is the point: everything under the
 two sections can differ per directory, nothing above them can.
 
-**The driver's settings have one source**, the driver's own config file:
+**The driver's settings come from the driver's own config file**:
 `driver_config` names it, and `include_dirs`, `include_file`,
 `auto_object`, `driver_object` and `typechecking` are read from it, for
-a whole-lib lint and for a profile build alike. They are not keys of
-`dgdtools.yml`: a second place to state them is a second place for them
-to be wrong. A partial checkout has no driver config; it gets them from
-its profile, which carries what the build read. (`dialect.typechecking`
-is the one that can still be said in the file, for a lib without a
-driver config at hand; the file's word wins.) The driver config's
+a whole-lib lint and for a profile build alike. A partial checkout has
+no driver config; it gets them from its profile, which carries what the
+build used. For a lib without its driver config at hand, the optional
+`driver:` block says them in `dgdtools.yml` under the same names (as
+clangd takes compile_flags.txt when there is no compile_commands.json).
+Each key it sets wins over the driver config and the profile, and the
+rest come from those: the local file has the last word. They are said
+there and nowhere else in the file. The driver config's
 `create` is not read: it is what the auto object receives, and in a lib
 whose auto object passes it on (the kernel library's `_F_create`), what
 objects define is `conventions.create`, default `create`.
@@ -96,7 +98,8 @@ to learn.
 
 Keys of dgdtools before 0.4 are errors that say what replaced them
 (`profile_build.driver_config moved: use top-level driver_config`,
-`include_dirs removed: dgdtools reads it from driver_config ...`,
+`include_dirs moved: set driver.include_dirs, or let dgdtools read it
+from driver_config ...`,
 `conventions.specifier_macros removed: use conventions.macros: { public:
 specifier }`), not merely unknown keys. The removed ones:
 `extends`, `include_dirs`, `include_file`, `auto_objects`,

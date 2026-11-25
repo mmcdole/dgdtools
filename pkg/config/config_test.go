@@ -117,6 +117,69 @@ func TestDriverConfigIsTheSource(t *testing.T) {
 	assert.ErrorContains(t, err, "driver_config: ")
 }
 
+// A driver: block sets driver settings in the file. Each key it sets
+// wins over the driver config and the profile; the rest come from them.
+func TestDriverBlock(t *testing.T) {
+	m := vfs.Mem{
+		"/mud/dgdtools.yml": "root: .\ndriver_config: mud.dgd\ndriver:\n  include_dirs: [/inc, sub]\n  typechecking: 2\n",
+		"/mud/mud.dgd":      driverCfg,
+		"/mud/a.c":          "",
+	}
+	prj, err := Discover(m, []string{"/mud/a.c"}, DiscoverOptions{})
+	require.NoError(t, err)
+	cfg := prj.Config
+	assert.Equal(t, []string{"/inc", "sub"}, cfg.IncludeDirs)
+	assert.Equal(t, 2, *cfg.Dialect.Typechecking)
+	assert.Equal(t, "/dgd/include/Std.h", cfg.IncludeFile, "from driver_config")
+	assert.Equal(t, []string{"/dgd/lib/object"}, cfg.AutoObjects, "from driver_config")
+
+	// Without a driver config the block is all there is; include_dirs: []
+	// says there are none.
+	m["/mud/dgdtools.yml"] = "root: .\ndriver:\n  include_dirs: []\n  include_file: /include/std.h\n  auto_object: /kernel/auto\n  driver_object: /kernel/driver\n"
+	prj, err = Discover(m, []string{"/mud/a.c"}, DiscoverOptions{})
+	require.NoError(t, err)
+	cfg = prj.Config
+	assert.NotNil(t, cfg.IncludeDirs)
+	assert.Empty(t, cfg.IncludeDirs)
+	assert.Equal(t, "/include/std.h", cfg.IncludeFile)
+	assert.Equal(t, []string{"/kernel/auto"}, cfg.AutoObjects)
+	assert.Equal(t, "/kernel/driver", cfg.DriverObject)
+	assert.Nil(t, cfg.Dialect.Typechecking)
+	assert.Equal(t, []string{"/mud/dgdtools.yml"}, prj.Inputs())
+
+	// Over a profile, in a partial checkout.
+	m = vfs.Mem{
+		"/w/dgdtools.yml": "profile: mud.profile\nlib_path: /usr/ann\ndriver:\n  typechecking: 1\n  auto_object: /sys/auto\n",
+		"/w/mud.profile": "dgdtools-profile 2\n" + `{"name":"mud","dialect":{"driver":"dgd","typechecking":0},` +
+			`"include_dirs":["/include"],"include_file":"/include/std.h","auto_objects":["/kernel/auto"],"conventions":{}}` + "\n",
+		"/w/a.c": "",
+	}
+	prj, err = Discover(m, []string{"/w/a.c"}, DiscoverOptions{})
+	require.NoError(t, err)
+	cfg = prj.Config
+	assert.Equal(t, 1, *cfg.Dialect.Typechecking)
+	assert.Equal(t, []string{"/sys/auto"}, cfg.AutoObjects)
+	assert.Equal(t, []string{"/include"}, cfg.IncludeDirs, "from the profile")
+	assert.Equal(t, "/include/std.h", cfg.IncludeFile, "from the profile")
+
+	// What is wrong with the block names the file and the line.
+	for text, want := range map[string]string{
+		"driver:\n  typechecking: 3\n":          "line 2: driver.typechecking: 3 is not a typechecking level (0, 1 or 2)",
+		"driver:\n  auto_objects: [/a]\n":       `line 2: unknown key "auto_objects" in driver (did you mean "auto_object"?)`,
+		"driver:\n  include_file: \"\"\n":       "line 2: driver.include_file is empty: give a value, or leave the key out",
+		"driver:\n  include_dirs: /inc\n":       "line 2: driver.include_dirs: want a list of directories",
+		"driver:\n  include_dirs: [/a, \"\"]\n": "line 2: driver.include_dirs: an empty directory",
+		"driver:\n  auto_object: [/a]\n":        "line 2: want a string here, not a list",
+		"driver:\n  typechecking: high\n":       "line 2: want a number here, not a string (high)",
+		"driver: /etc/mud.dgd\n":                "line 1: driver: want a mapping with any of include_dirs",
+	} {
+		_, err := Load(vfs.Mem{"/p/dgdtools.yml": text}, "/p/dgdtools.yml")
+		require.Error(t, err, text)
+		assert.Contains(t, err.Error(), "/p/dgdtools.yml: ", text)
+		assert.Contains(t, err.Error(), want, text)
+	}
+}
+
 func TestRuleSettings(t *testing.T) {
 	m := vfs.Mem{
 		"/proj/dgdtools.yml": `root: lib
@@ -170,10 +233,11 @@ lint:
 func TestRemovedKeys(t *testing.T) {
 	for text, want := range map[string]string{
 		"extends: base.yml\n":                                    "line 1: extends removed: put per-directory settings in a nested dgdtools.yml with root: false",
-		"root: .\ninclude_dirs: [/include]\n":                    "line 2: include_dirs removed: dgdtools reads it from driver_config",
-		"include_file: /i.h\n":                                   "include_file removed: dgdtools reads it from driver_config",
-		"auto_objects: [/sys/auto]\n":                            "auto_objects removed: dgdtools reads auto_object from driver_config",
-		"driver_object: /sys/driver\n":                           "driver_object removed: dgdtools reads it from driver_config",
+		"root: .\ninclude_dirs: [/include]\n":                    "line 2: include_dirs moved: set driver.include_dirs, or let dgdtools read it from driver_config",
+		"include_file: /i.h\n":                                   "include_file moved: set driver.include_file, or let dgdtools read it from driver_config",
+		"auto_objects: [/sys/auto]\n":                            "auto_objects moved: set driver.auto_object (one object, as in the driver config), or let dgdtools read it from driver_config",
+		"driver_object: /sys/driver\n":                           "driver_object moved: set driver.driver_object, or let dgdtools read it from driver_config",
+		"dialect:\n  typechecking: 2\n":                          "line 2: dialect.typechecking moved: set driver.typechecking, or let dgdtools read it from driver_config",
 		"create: setup\n":                                        "create moved: use conventions.create",
 		"profile_build:\n  name: x\n  driver_config: mud.dgd\n":  "line 3: profile_build.driver_config moved: use top-level driver_config",
 		"conventions:\n  specifier_macros: [public]\n":           "conventions.specifier_macros removed: use conventions.macros: { public: specifier }",

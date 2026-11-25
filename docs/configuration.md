@@ -53,7 +53,7 @@ lint:
 Unknown keys and invalid values are errors rather than silently ignored; a misspelled key gets a "did you mean" suggestion, and a key that older versions of dgdtools had says what replaced it (see [Removed keys](#removed-keys)).
 
 Configuration keys fall into two categories:
-- **Project keys** (top-level) describe the mudlib itself. In a partial checkout, the driver settings come from the mudlib profile, and the dialect and conventions the config leaves unset do too.
+- **Project keys** (top-level) describe the mudlib itself. In a partial checkout, the driver settings the config leaves unset come from the mudlib profile, and the dialect and conventions it leaves unset do too.
 - **Settings** (`format:` and `lint:`) control formatting and linting behavior and can be customized per directory.
 
 ---
@@ -66,7 +66,8 @@ Configuration keys fall into two categories:
 | `profile` | Mudlib profile to work against: a profile name (looked up as `NAME.profile`) or a file path. Supplies driver settings, shared headers, and shared object signatures. Local files on disk always override the profile. |
 | `lib_path` | The mudlib path of a partial checkout (e.g., `/usr/ann`) when its filesystem path doesn't match the profile's `checkouts` patterns. |
 | `exclude` | Globs relative to the mudlib root that are skipped during directory walks. Files named explicitly on the command line are always processed. |
-| `driver_config` | The DGD driver's config file, relative to `dgdtools.yml`: the one source of the driver settings, for whole-mudlib lint, the language server, and `dgdtools profile build`. dgdtools reads `include_dirs` (include dirs without a leading `/` are relative to the including file; dirs starting with `~` are treated as unknown), `include_file` (force-included header), `auto_object`, `driver_object` (whose driver-called functions cannot be renamed), and `typechecking`. A partial checkout gets these from its profile instead. |
+| `driver_config` | The DGD driver's config file, relative to `dgdtools.yml`: where the driver settings are read from, for whole-mudlib lint, the language server, and `dgdtools profile build`. dgdtools reads `include_dirs` (include dirs without a leading `/` are relative to the including file; dirs starting with `~` are treated as unknown), `include_file` (force-included header), `auto_object`, `driver_object` (whose driver-called functions cannot be renamed), and `typechecking`. A project with a profile gets these from the profile instead, and does not read `driver_config`. |
+| `driver` | The driver settings written in `dgdtools.yml`, for a mudlib without its driver config at hand: `include_dirs`, `include_file`, `auto_object`, `driver_object`, and `typechecking`, named and read as in the driver config (e.g., `driver: { include_dirs: [/include], auto_object: /kernel/auto, typechecking: 2 }`). Each key is optional. One that is set wins over `driver_config` and the profile; the rest come from them. |
 | `dialect` | Driver build flags and extensions: `slash_slash` (default `true`), `closures` (default `false`), and `kfuns` (extra extension-module kfun prototypes, e.g., `"int *rusage()"` or `"string sha256(string text, varargs int rounds)"`). Stock DGD kfuns are built in. |
 | `relative_object_paths` | Base for object paths without a leading slash (like `"std/room"` in `inherit` or `call_other`): `root` (default, matching `compile_object`) or `file` (relative to the current file's directory, as in the kernel library). |
 | `conventions` | Mudlib-specific patterns (none enabled by default):<br>• `create`: the function the mudlib's objects define to be initialized (default `create`). Set it when objects define another name; the driver config's `create` is not used, since in a mudlib whose auto object receives the driver's call and passes it on (like the kernel library's `_F_create` → `create`), it is not what objects define.<br>• `macros`: macro classifications (`expression`, `empty`, `specifier`, `type`, `string`, `statement`, `opaque`) overriding what is inferred from a `#define` and covering files read without the header that defines the macro, e.g. `{ public: specifier }` for a mudlib's `#define public`.<br>• `defines`: macro names treated as defined for `#ifdef` evaluation.<br>• `call_registry`: functions that invoke a function by name, specifying 0-based `function`, optional `object` (defaults to `this_object()`), and optional `args` indices; multiple overloads can be listed (`call_other` and `call_out` are built in).<br>• `object_registry`: functions taking an object path string argument (`compile_object`, `find_object`, `clone_object` are built in).<br>• `autosave_markers`: symbols indicating an object persists state via `save_object`.<br>• `virtual_paths`: mudlib path globs served by virtual-object daemons (no backing `.c` file). |
@@ -112,8 +113,8 @@ For scalar settings, the highest-priority source wins:
 
 1. Command-line flags
 2. Nearest nested settings scope, then outer scopes
-3. Project `dgdtools.yml`
-4. The mudlib profile (driver settings; dialect and conventions the config leaves unset)
+3. Project `dgdtools.yml` (including its `driver:` block)
+4. The mudlib profile, or without one `driver_config` (driver settings; from the profile also dialect and conventions)
 5. `.editorconfig` (`indent_style`, `indent_size`, `end_of_line` for the three `format` keys)
 6. Built-in defaults
 
@@ -136,7 +137,7 @@ dgdtools 0.4 trimmed the configuration. A config that still uses an old key fail
 | Old key | Now |
 |---|---|
 | `profile_build.driver_config` | Top-level `driver_config` |
-| `include_dirs`, `include_file`, `auto_objects`, `driver_object`, `dialect.typechecking` | Read from `driver_config` (a partial checkout gets them from its profile) |
+| `include_dirs`, `include_file`, `auto_objects`, `driver_object`, `dialect.typechecking` | The `driver:` block (`auto_objects` is `driver.auto_object`), or read from `driver_config` (a partial checkout gets them from its profile) |
 | `create` | `conventions.create` (default `create`) |
 | `conventions.specifier_macros: [public]` | `conventions.macros: { public: specifier }` |
 | `conventions.format_registry` | Removed; `sscanf` is built in |
@@ -154,11 +155,11 @@ Profiles changed with it (format 2): rebuild them with `dgdtools profile build`.
 A **mudlib profile** (`<name>.profile`) is a compact interface file published by a mudlib's maintainers so wizards can lint, navigate, and complete code in a partial checkout without downloading the whole mudlib.
 
 A profile contains:
-- The mudlib's driver settings (what `profile build` read from `driver_config`), dialect flags, and conventions
+- The mudlib's driver settings (what `profile build` took from `driver:` and `driver_config`), dialect flags, and conventions
 - Shared header files (so `#include` directives and macros resolve)
-- Public stubs of shared objects: `#define`s and `#include`s of shared headers, `inherit` statements, and all non-private function and global variable declarations with bodies replaced by `{}`
+- Public stubs of shared objects: `#define`s and `#include`s of shared headers, `inherit` statements, and all non-private function and global variable declarations with bodies replaced by `{}`, each with the comment above it that hover shows
 
-It never includes function bodies, comments, private symbols, or anything matched by `profile_build.omit`. For reference, VikingMUD's 720 shared files produce a 113 KB profile.
+It never includes function bodies, other comments, private symbols, or anything matched by `profile_build.omit`. For reference, VikingMUD's 720 shared files produce a 149 KB profile.
 
 ### For wizards (using a profile)
 
@@ -182,7 +183,7 @@ Anything neither in your local checkout nor in the profile (such as another wiza
 
 ### For mudlib maintainers (building a profile)
 
-From a full mudlib checkout whose `dgdtools.yml` has `root:`, `driver_config:`, and a `profile_build:` section:
+From a full mudlib checkout whose `dgdtools.yml` has `root:`, `driver_config:` (or a `driver:` block), and a `profile_build:` section:
 
 ```sh
 dgdtools profile build                     # Generates dgdtools.profile

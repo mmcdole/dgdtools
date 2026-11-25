@@ -467,7 +467,7 @@ func TestCompletePartialCheckout(t *testing.T) {
 		Files: map[string]string{
 			"/include/std.h": "#define ROOM \"/std/room\"\n",
 			"/sys/auto.c":    "void autof();\n",
-			"/std/room.c":    "inherit \"/std/object\";\nint room_var;\nvoid set_short(string s);\nstatic void reset();\n",
+			"/std/room.c":    "inherit \"/std/object\";\nint room_var;\n/* Sets the short description. */\nvoid set_short(string s);\nstatic void reset();\n",
 			"/std/object.c":  "void create();\n",
 		},
 	}
@@ -483,18 +483,22 @@ func TestCompletePartialCheckout(t *testing.T) {
 	w := newWorld(t, fs, "/home/ann")
 	const hall = "/home/ann/hall.c"
 	head := "#include <std.h>\n#include \"mine.h\"\ninherit ROOM;\n"
-	c, _ := w.completeIn(hall, head+"void create() { | }\n")
+	c, doc := w.completeIn(hall, head+"void create() { | }\n")
 	require.NotNil(t, c)
 	assert.Equal(t, []string{"function create", "function reset", "function set_short", "function autof"}, offered(c, resolve.Function)[:4])
 	assert.Contains(t, names(c), "rusage")
 	assert.Contains(t, names(c), "strlen")
 	assert.Equal(t, []string{"variable room_var"}, offered(c, resolve.Variable))
 	assert.Equal(t, []string{"macro MINE", "macro ROOM"}, offered(c, resolve.Macro))
-	// A stub has the declaration and neither a line nor a comment.
-	assert.Equal(t, "function `void set_short(string s)` @ profile mini, /std/room.c rank 2 call(args)", describe(item(t, c, "set_short", true)))
-	assert.Equal(t, "function `void autof()` @ auto object, profile mini, /sys/auto.c rank 4 call", describe(item(t, c, "autof", true)))
-	assert.Equal(t, "variable `int room_var` @ profile mini, /std/room.c rank 2", describe(item(t, c, "room_var", false)))
+	// A stub has the declaration and the comment it kept, but no line.
+	assert.Equal(t, "function `void set_short(string s)` @ profile mini, /std/room.c rank 2 call(args) doc dgdtools-profile://mini/std/room.c", describe(item(t, c, "set_short", true)))
+	assert.Equal(t, "function `void autof()` @ auto object, profile mini, /sys/auto.c rank 4 call doc dgdtools-profile://mini/sys/auto.c", describe(item(t, c, "autof", true)))
+	assert.Equal(t, "variable `int room_var` @ profile mini, /std/room.c rank 2 doc dgdtools-profile://mini/std/room.c", describe(item(t, c, "room_var", false)))
 	assert.Equal(t, "macro `#define ROOM \"/std/room\"` @ profile mini, /include/std.h rank 3", describe(item(t, c, "ROOM", false)))
+	it := item(t, c, "set_short", true)
+	assert.Equal(t, "Sets the short description.", doc.Comment(it.Path, it.Off))
+	it = item(t, c, "room_var", false)
+	assert.Empty(t, doc.Comment(it.Path, it.Off))
 
 	for text, want := range map[string][]string{
 		head + "void create() { ::| }\n":                       {"function create", "function reset", "function set_short", "function autof"},

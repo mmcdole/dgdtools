@@ -90,7 +90,7 @@ DGD requires every inherit to precede all declarations ("inherit must precede al
 
 Untyped parameter in a typeless function, under driver typechecking.
 
-With typechecking >= 1 in the driver config, a function written without a return type is still type-checked, and a parameter without a type is the compile error "missing type for parameter". Silent when the typechecking level is unknown (set driver_config).
+With typechecking >= 1 in the driver config, a function written without a return type is still type-checked, and a parameter without a type is the compile error "missing type for parameter". Silent when the typechecking level is unknown (set driver_config, or driver.typechecking).
 
 ### return-value
 

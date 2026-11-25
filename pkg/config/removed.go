@@ -16,17 +16,22 @@ var removedTop = map[string]string{
 	"extends":       "extends removed: put per-directory settings in a nested dgdtools.yml with root: false, and share a mudlib's setup with a profile",
 	"include_dirs":  driverKey("include_dirs"),
 	"include_file":  driverKey("include_file"),
-	"auto_objects":  driverKey("auto_object"),
+	"auto_objects":  driverKey("auto_objects"),
 	"driver_object": driverKey("driver_object"),
 	"create":        "create moved: use conventions.create (default create)",
 }
 
-func driverKey(key string) string {
-	name, what := key, "it"
-	if key == "auto_object" {
-		name, what = "auto_objects", key
+// driverKey says where a driver setting that was a top-level key, or a
+// key of dialect:, is said now.
+func driverKey(old string) string {
+	key, as := old, ""
+	switch old {
+	case "auto_objects":
+		key, as = "auto_object", " (one object, as in the driver config)"
+	case "dialect.typechecking":
+		key = "typechecking"
 	}
-	return fmt.Sprintf("%s removed: dgdtools reads %s from driver_config, the DGD driver's config file (a partial checkout gets it from its profile)", name, what)
+	return fmt.Sprintf("%s moved: set driver.%s%s, or let dgdtools read it from driver_config, the DGD driver's config file (a partial checkout gets it from its profile)", old, key, as)
 }
 
 // checkRemoved reports the first key of an older dgdtools that the file
@@ -54,7 +59,7 @@ func checkRemoved(data []byte) error {
 		case "dialect":
 			for k2 := range pairs(v) {
 				if k2.Value == "typechecking" {
-					return fail(k2, "dialect.typechecking removed: dgdtools reads typechecking from driver_config (a partial checkout gets it from its profile)")
+					return fail(k2, driverKey("dialect.typechecking"))
 				}
 			}
 		case "conventions":

@@ -11,7 +11,8 @@
 //     and which lib directories the profile captures completely;
 //   - stub files: for each shared header its #includes and #defines, and
 //     for each shared object its inherit statements and the signatures of
-//     its functions and variables. No function bodies, no comments.
+//     its functions and variables, each with the comment hover shows for
+//     it. No function bodies, no other comments.
 //
 // Stubs are ordinary source in the profile's dialect, so the same lexer,
 // parser and index that read real files read them; a real file on disk

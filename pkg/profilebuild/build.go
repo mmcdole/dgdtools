@@ -19,6 +19,7 @@ import (
 	"github.com/mmcdole/dgdtools/pkg/index"
 	"github.com/mmcdole/dgdtools/pkg/pp"
 	"github.com/mmcdole/dgdtools/pkg/profile"
+	"github.com/mmcdole/dgdtools/pkg/resolve"
 	"github.com/mmcdole/dgdtools/pkg/syntax"
 	"github.com/mmcdole/dgdtools/pkg/token"
 	"github.com/mmcdole/dgdtools/pkg/vfs"
@@ -256,10 +257,11 @@ func sharedByUse(ctx context.Context, ix *index.Snapshot, reg *calls.Registry, r
 // a C header or a .d.ts file does: its #include directives, its inherit
 // statements, and every non-private function and global variable
 // declaration exactly as written (specifiers, types, parameter names,
-// varargs and ellipsis), with function bodies replaced by `{}`. Comments,
-// bodies, private functions and private variables are left out. A
-// declaration written without a type stays without one: that matters to a
-// driver with typechecking on.
+// varargs and ellipsis), with function bodies replaced by `{}`. Each of
+// those declarations keeps the comment hover shows for it
+// (resolve.Comment); other comments, bodies, private functions and
+// private variables are left out. A declaration written without a type
+// stays without one: that matters to a driver with typechecking on.
 //
 // header says the file is #included by others: all of its macros are
 // kept. A plain object keeps only the macros its declarations use (a type
@@ -277,42 +279,52 @@ func Stub(p *index.Parsed, header bool) string {
 		}
 	}
 
+	// A piece is the stub's text for one declaration of the file, and
+	// the comment hover shows for it, which goes above that text.
 	type piece struct {
 		node syntax.Node
+		doc  string
 		text string
+	}
+	// doc returns the comment of a declaration that the stub keeps.
+	doc := func(n syntax.Node) string {
+		first, _ := n.Span()
+		if c := resolve.CommentSource(f, f.Tokens[first].Off); c != "" {
+			return c + "\n"
+		}
+		return ""
 	}
 	var decls []piece
 	for _, d := range tree.Decls {
 		switch d := d.(type) {
 		case *syntax.InheritDecl:
-			decls = append(decls, piece{d, tree.SourceText(d.First, d.Last) + "\n"})
+			decls = append(decls, piece{d, "", tree.SourceText(d.First, d.Last) + "\n"})
 		case *syntax.FuncDecl:
 			if d.Name != nil && !d.Has(token.KwPrivate) {
 				end := " {}\n"
 				if d.Body == nil {
 					end = ";\n"
 				}
-				decls = append(decls, piece{d, tree.FuncDeclText(d) + end})
+				decls = append(decls, piece{d, doc(d), tree.FuncDeclText(d) + end})
 			}
 		case *syntax.VarDecl:
 			if d.Has(token.KwPrivate) {
 				continue
 			}
-			text := ""
+			// The variables are one declaration in the stub, and each
+			// prototype is one; the comment goes above each.
+			c := doc(d)
 			if len(d.Vars) > 0 {
 				var names []string
 				for _, v := range d.Vars {
 					names = append(names, strings.Repeat("*", v.Stars)+v.Name.Name)
 				}
-				text = tree.DeclPrefix(d.Specs, d.Type) + strings.Join(names, ", ") + ";\n"
+				decls = append(decls, piece{d, c, tree.DeclPrefix(d.Specs, d.Type) + strings.Join(names, ", ") + ";\n"})
 			}
 			for _, proto := range d.Protos {
 				if proto.Name != nil {
-					text += tree.FuncDeclText(proto) + ";\n"
+					decls = append(decls, piece{d, c, tree.FuncDeclText(proto) + ";\n"})
 				}
-			}
-			if text != "" {
-				decls = append(decls, piece{d, text})
 			}
 		case *syntax.BadDecl:
 			partial = true
@@ -363,9 +375,9 @@ func Stub(p *index.Parsed, header bool) string {
 		// A declaration in a conditional branch that was only guessed at
 		// is kept under a condition the reader will also only guess at.
 		if a, _ := d.node.Span(); tree.Sel.Guessed(a) {
-			b.WriteString("#ifdef __DGDTOOLS_UNDECIDED__\n" + d.text + "#endif\n")
+			b.WriteString("#ifdef __DGDTOOLS_UNDECIDED__\n" + d.doc + d.text + "#endif\n")
 		} else {
-			b.WriteString(d.text)
+			b.WriteString(d.doc + d.text)
 		}
 	}
 	if partial {

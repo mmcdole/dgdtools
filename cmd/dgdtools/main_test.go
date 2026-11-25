@@ -217,7 +217,7 @@ func TestConfigVerifies(t *testing.T) {
 		write(t, "/", map[string]string{file: was})
 	}
 	bad(cfg, "root: lib\ndriver_confg: mud.dgd\n", `line 2: unknown key "driver_confg" (did you mean "driver_config"?)`)
-	bad(cfg, "root: lib\ninclude_dirs: [/x]\n", cfg+": line 2: include_dirs removed: dgdtools reads it from driver_config")
+	bad(cfg, "root: lib\ninclude_dirs: [/x]\n", cfg+": line 2: include_dirs moved: set driver.include_dirs, or let dgdtools read it from driver_config")
 	bad(cfg, "root: lib\nprofile_build:\n  driver_config: mud.dgd\n", cfg+": line 3: profile_build.driver_config moved: use top-level driver_config")
 	bad(cfg, "root: lib\nconventions:\n  specifier_macros: [public]\n", "conventions.specifier_macros removed: use conventions.macros: { public: specifier }")
 	bad(cfg, "root: lib\nrelative_object_paths: here\n", cfg+": relative_object_paths: unknown value \"here\"")

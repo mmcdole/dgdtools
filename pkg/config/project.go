@@ -1,12 +1,17 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+
+	"gopkg.in/yaml.v3"
+
+	"github.com/mmcdole/dgdtools/internal/fuzzy"
 
 	"github.com/mmcdole/dgdtools/pkg/diag"
 	"github.com/mmcdole/dgdtools/pkg/editorconfig"
@@ -347,6 +352,8 @@ func resolve(fs vfs.FS, opt DiscoverOptions, found, base string) (*Project, erro
 			}
 		}
 	}
+	// What the file's driver: block sets wins over both. Load checked it.
+	cfg.applyDriver()
 
 	switch {
 	case opt.Root != "":
@@ -586,18 +593,17 @@ func InferCheckout(dir string, patterns []string) (checkoutDir, lib string, ok b
 }
 
 // applyProfile fills the config from a profile's manifest. The driver
-// settings are the profile's; of the rest, anything the config sets
-// itself wins, and registries are merged.
+// settings are the profile's, until the file's driver: block is applied
+// over them; of the rest, anything the config sets itself wins, and
+// registries are merged.
 func applyProfile(cfg *Config, p *profile.Profile) {
 	cfg.IncludeDirs = p.IncludeDirs
 	cfg.IncludeFile = p.IncludeFile
 	cfg.AutoObjects = p.AutoObjects
 	cfg.DriverObject = p.DriverObject
+	cfg.Dialect.Typechecking = p.Dialect.Typechecking
 	if cfg.RelativeObjectPaths == "" {
 		cfg.RelativeObjectPaths = p.RelativeObjectPaths
-	}
-	if cfg.Dialect.Typechecking == nil {
-		cfg.Dialect.Typechecking = p.Dialect.Typechecking
 	}
 	if cfg.Dialect.SlashSlash == nil {
 		v := p.Dialect.SlashSlash
@@ -640,12 +646,80 @@ func merge[V any](dst *map[string]V, src map[string]V) {
 // Its create is not among them: what the lib's objects define is
 // conventions.create, which in a lib whose auto object receives the
 // driver's call is another function.
+//
+// It is also the driver: block of dgdtools.yml, whose keys are the
+// driver config's names. There an unset value is the zero one, except
+// that include_dirs: [] says the driver has none.
 type DriverConfig struct {
 	IncludeFile  string
 	IncludeDirs  []string
 	AutoObject   string
 	DriverObject string
 	Typechecking *int
+}
+
+// driverKeys are the keys of the driver: block.
+var driverKeys = []string{"include_dirs", "include_file", "auto_object", "driver_object", "typechecking"}
+
+func (dc *DriverConfig) UnmarshalYAML(n *yaml.Node) error {
+	*dc = DriverConfig{}
+	if n.Kind != yaml.MappingNode {
+		return fmt.Errorf("line %d: driver: want a mapping with any of %s", n.Line, strings.Join(driverKeys, ", "))
+	}
+	for k, v := range pairs(n) {
+		str := func(s *string) error {
+			if err := v.Decode(s); err != nil {
+				return yamlError(err)
+			}
+			if *s == "" {
+				return fmt.Errorf("line %d: driver.%s is empty: give a value, or leave the key out", v.Line, k.Value)
+			}
+			return nil
+		}
+		var err error
+		switch k.Value {
+		case "include_file":
+			err = str(&dc.IncludeFile)
+		case "auto_object":
+			err = str(&dc.AutoObject)
+		case "driver_object":
+			err = str(&dc.DriverObject)
+		case "include_dirs":
+			if v.Kind != yaml.SequenceNode {
+				return fmt.Errorf("line %d: driver.include_dirs: want a list of directories", v.Line)
+			}
+			dc.IncludeDirs = []string{}
+			for _, d := range v.Content {
+				var s string
+				if err := d.Decode(&s); err != nil {
+					return yamlError(err)
+				}
+				if s == "" {
+					return fmt.Errorf("line %d: driver.include_dirs: an empty directory", d.Line)
+				}
+				dc.IncludeDirs = append(dc.IncludeDirs, s)
+			}
+		case "typechecking":
+			var tc int
+			if err := v.Decode(&tc); err != nil {
+				return yamlError(err)
+			}
+			if tc < 0 || tc > 2 {
+				return fmt.Errorf("line %d: driver.typechecking: %d is not a typechecking level (0, 1 or 2)", v.Line, tc)
+			}
+			dc.Typechecking = &tc
+		default:
+			msg := fmt.Sprintf("line %d: unknown key %q in driver", k.Line, k.Value)
+			if near := fuzzy.Nearest(k.Value, driverKeys); near != "" {
+				msg += fmt.Sprintf(" (did you mean %q?)", near)
+			}
+			return errors.New(msg)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ReadDriverConfig parses a DGD driver configuration file
@@ -706,8 +780,7 @@ func ReadDriverConfig(fs vfs.FS, path string) (*DriverConfig, error) {
 	return dc, nil
 }
 
-// Apply sets the config's driver settings to the driver config's. A
-// dialect.typechecking the file sets wins.
+// Apply sets the config's driver settings to the driver config's.
 func (dc *DriverConfig) Apply(cfg *Config) {
 	cfg.IncludeDirs = dc.IncludeDirs
 	cfg.IncludeFile = dc.IncludeFile
@@ -716,7 +789,27 @@ func (dc *DriverConfig) Apply(cfg *Config) {
 		cfg.AutoObjects = []string{dc.AutoObject}
 	}
 	cfg.DriverObject = dc.DriverObject
-	if cfg.Dialect.Typechecking == nil {
-		cfg.Dialect.Typechecking = dc.Typechecking
+	cfg.Dialect.Typechecking = dc.Typechecking
+}
+
+// applyDriver sets the driver settings the file's driver: block gives,
+// over what the driver config or the profile said. Each key stands on
+// its own: one the block leaves out keeps their value.
+func (c *Config) applyDriver() {
+	d := &c.Driver
+	if d.IncludeDirs != nil {
+		c.IncludeDirs = d.IncludeDirs
+	}
+	if d.IncludeFile != "" {
+		c.IncludeFile = d.IncludeFile
+	}
+	if d.AutoObject != "" {
+		c.AutoObjects = []string{d.AutoObject}
+	}
+	if d.DriverObject != "" {
+		c.DriverObject = d.DriverObject
+	}
+	if d.Typechecking != nil {
+		c.Dialect.Typechecking = d.Typechecking
 	}
 }

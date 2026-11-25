@@ -65,11 +65,15 @@ type Config struct {
 	// Exclude are globs (lib-relative) of files directory walks skip.
 	Exclude []string `yaml:"exclude"`
 	// DriverConfig is the DGD driver's config file, relative to the
-	// config file's directory: the one source of the driver settings
-	// (include_dirs, include_file, auto_object, driver_object,
-	// typechecking), for a whole-lib lint and for a profile build. A
-	// partial checkout gets them from its profile instead.
+	// config file's directory: where the driver settings (include_dirs,
+	// include_file, auto_object, driver_object, typechecking) are read
+	// from, for a whole-lib lint and for a profile build. A partial
+	// checkout gets them from its profile instead.
 	DriverConfig string `yaml:"driver_config"`
+	// Driver states driver settings in the file itself, under the driver
+	// config's names. Each one it sets wins over what the driver config
+	// or the profile says; see Config.applyDriver.
+	Driver DriverConfig `yaml:"driver"`
 
 	Dialect DialectCfg `yaml:"dialect"`
 	// RelativeObjectPaths says what an object path without a leading
@@ -92,8 +96,8 @@ type Config struct {
 	Format Format `yaml:"format"`
 	Lint   Lint   `yaml:"lint"`
 
-	// Driver settings: not keys of the file, but what the driver config
-	// (DriverConfig) or the profile says.
+	// Driver settings in effect: what the driver: block, the driver
+	// config (DriverConfig) or the profile says.
 
 	// IncludeDirs are lib-absolute search paths for #include <...> and
 	// "..." resolution (the driver config's include_dirs).
@@ -166,8 +170,9 @@ func (pb *ProfileBuild) MinOwners() int {
 type DialectCfg struct {
 	SlashSlash *bool `yaml:"slash_slash"` // default true
 	Closures   bool  `yaml:"closures"`    // default false
-	// Typechecking is the driver's typechecking level (0, 1, 2), read
-	// from driver_config or the profile, never written in dgdtools.yml.
+	// Typechecking is the driver's typechecking level (0, 1, 2), from
+	// driver.typechecking, driver_config or the profile; it is not a key
+	// of dialect:.
 	// Rules that only hold under typechecking stay silent when it is
 	// unknown.
 	Typechecking *int `yaml:"-"`
@@ -500,6 +505,7 @@ func (c *Config) projectKey(run bool) string {
 		{"lib_path", c.LibPath != ""},
 		{"exclude", len(c.Exclude) > 0},
 		{"driver_config", c.DriverConfig != ""},
+		{"driver", !reflect.DeepEqual(c.Driver, DriverConfig{})},
 		{"dialect", !reflect.DeepEqual(c.Dialect, DialectCfg{})},
 		{"relative_object_paths", c.RelativeObjectPaths != ""},
 		{"conventions", !reflect.DeepEqual(c.Conventions, profile.Conventions{})},

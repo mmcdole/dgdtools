@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -14,9 +15,12 @@ import (
 	"github.com/mmcdole/dgdtools/pkg/config"
 	"github.com/mmcdole/dgdtools/pkg/diag"
 	"github.com/mmcdole/dgdtools/pkg/index"
+	"github.com/mmcdole/dgdtools/pkg/lexer"
 	"github.com/mmcdole/dgdtools/pkg/lint"
 	"github.com/mmcdole/dgdtools/pkg/profile"
 	"github.com/mmcdole/dgdtools/pkg/profilebuild"
+	"github.com/mmcdole/dgdtools/pkg/resolve"
+	"github.com/mmcdole/dgdtools/pkg/token"
 	"github.com/mmcdole/dgdtools/pkg/vfs"
 )
 
@@ -305,6 +309,67 @@ func TestProfileResolution(t *testing.T) {
 	assert.Equal(t, "/players/zed", prj.CheckoutLib)
 }
 
+// A stub keeps the comment hover shows for each declaration it has, and
+// no other.
+func TestStubComments(t *testing.T) {
+	m := vfs.Mem{
+		"/mud/dgdtools.yml": "root: lib\nprofile_build:\n  name: m\n  share: [\"std/**\"]\n",
+		"/mud/lib/std/thing.c": `/* What the file is: a loose comment. */
+
+inherit "/std/base"; /* the base */
+// The count.
+int count;
+/* A secret. */
+private int secret;
+/** Does a thing.
+ * Really. */
+void thing(int x) {
+    /* inside */
+    x++; // trailing
+}
+/* Hidden. */
+private void hidden() { }
+int a; /* after a */
+int b;
+/* Before a blank line. */
+
+int c;
+/* Both. */
+int d, e(int x);
+`,
+		"/mud/lib/std/base.c": "",
+	}
+	prj, err := config.Discover(m, []string{"/mud/lib"}, config.DiscoverOptions{})
+	require.NoError(t, err)
+	p, err := profilebuild.Build(context.Background(), prj, m)
+	require.NoError(t, err)
+	stub := p.Files["/std/thing.c"]
+	assert.Equal(t, `inherit "/std/base";
+// The count.
+int count;
+/** Does a thing.
+ * Really. */
+void thing(int x) {}
+int a;
+int b;
+int c;
+/* Both. */
+int d;
+/* Both. */
+int e(int x);
+`, stub)
+
+	// What hover reads in the stub is what it reads in the file.
+	src, tok := m["/mud/lib/std/thing.c"], lexer.Lex("s.c", []byte(stub), token.Dialect{SlashSlash: true})
+	file := lexer.Lex("f.c", []byte(src), token.Dialect{SlashSlash: true})
+	for _, name := range []string{"count", "thing", "a", "b", "c", "d", "e"} {
+		at := func(text string) uint32 {
+			return uint32(regexp.MustCompile(` ` + name + `[;,(]`).FindStringIndex(text)[0] + 1)
+		}
+		assert.Equal(t, resolve.Comment(file, at(src)), resolve.Comment(tok, at(stub)), name)
+	}
+}
+
 // Declarations that come from a profile are located by a stub URI, never
 // by a path that looks like a file on disk.
 func TestStubLocations(t *testing.T) {
@@ -390,6 +455,24 @@ func TestProfileCarriesTheCreateFunction(t *testing.T) {
 	want := []string{"sword.c:2 lifecycle-chain setup() overrides inherited /std/thing::setup() but does not chain it; call ::setup()"}
 	assert.Equal(t, want, findings(t, full, m, "/mud/lib/usr/ann"))
 	assert.Equal(t, want, findings(t, part, alone))
+}
+
+// A whole lib whose dgdtools.yml gives the driver settings in a driver:
+// block, with no driver config, builds the same profile.
+func TestProfileFromDriverBlock(t *testing.T) {
+	build := func(m vfs.Mem) *profile.Profile {
+		t.Helper()
+		prj, err := config.Discover(m, []string{"/mud/lib"}, config.DiscoverOptions{})
+		require.NoError(t, err)
+		p, err := profilebuild.Build(context.Background(), prj, m)
+		require.NoError(t, err)
+		return p
+	}
+	m := wholeLib()
+	delete(m, "/mud/etc/mud.dgd")
+	m["/mud/dgdtools.yml"] = strings.Replace(m["/mud/dgdtools.yml"], "driver_config: etc/mud.dgd\n",
+		"driver:\n  include_file: /sys/forced.h\n  include_dirs: [/std/include]\n  auto_object: /sys/auto\n  driver_object: /sys/driver\n  typechecking: 1\n", 1)
+	assert.Equal(t, build(wholeLib()), build(m))
 }
 
 // share_min_owners: files used by that many owners are shared; 0 shares

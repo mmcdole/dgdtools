@@ -36,7 +36,8 @@ type Info struct {
 	Code string
 	// Doc is the comment that stands directly above the declaration,
 	// without its comment marks, or the line the kfun table has; "" when
-	// there is none. A profile's stub has no comments.
+	// there is none. A profile's stub keeps the comment of each
+	// function and variable it declares, and no other.
 	Doc string
 	// Class is the class of a macro, what the parser takes its uses for
 	// (pp.Class).
@@ -348,15 +349,16 @@ func (t *texts) file(path string) *token.File {
 
 // declared returns the line of the byte offset off of the file at path
 // and the comment directly above the declaration that the token at off
-// is of (Comment). A stub has no comments, and its lines are not those
-// of the file it stands for.
+// is of (Comment). A stub keeps the comment of each declaration in it
+// (CommentSource), but its lines are not those of the file it stands
+// for: the line is 0.
 func (t *texts) declared(path string, off uint32, stub bool) (line int, doc string) {
-	if stub {
-		return 0, ""
-	}
 	f := t.file(path)
 	if f == nil || off > uint32(len(f.Src)) {
 		return 0, ""
+	}
+	if stub {
+		return 0, Comment(f, off)
 	}
 	return f.Pos(off).Line, Comment(f, off)
 }
@@ -374,6 +376,38 @@ func (t *texts) declared(path string, off uint32, stub bool) (line int, doc stri
 // text that is not valid UTF-8 is read as Latin-1). It is "" when there
 // is none.
 func Comment(f *token.File, off uint32) string {
+	first, last := docComment(f, off)
+	if first < 0 {
+		return ""
+	}
+	toks := f.Tokens
+	if toks[first].Kind == token.BlockComment {
+		return utf8Text(strings.Join(trimLines(blockLines(f.Text(toks[first])), true), "\n"))
+	}
+	var lines []string
+	for _, t := range toks[first : last+1] {
+		if t.Kind == token.LineComment {
+			lines = append(lines, strings.TrimPrefix(string(f.Text(t)), "//"))
+		}
+	}
+	return utf8Text(strings.Join(trimLines(lines, false), "\n"))
+}
+
+// CommentSource returns the comment Comment reads for the token at byte
+// offset off of f as it is written: from the start of the comment to its
+// end, "" when there is none. Put on the line above a copy of the
+// declaration, it gives the copy the same Comment.
+func CommentSource(f *token.File, off uint32) string {
+	if Comment(f, off) == "" {
+		return ""
+	}
+	first, last := docComment(f, off)
+	return string(f.Src[f.Tokens[first].Off:f.Tokens[last].End])
+}
+
+// docComment returns the indexes of the first and the last token of the
+// comment Comment reads, or -1 and -1.
+func docComment(f *token.File, off uint32) (first, last int) {
 	toks := f.Tokens
 	i := f.TokenAt(off)
 	// Back to the first token of the declaration.
@@ -398,7 +432,7 @@ func Comment(f *token.File, off uint32) string {
 		}
 	}
 	if j < 0 || breaks > 1 {
-		return ""
+		return -1, -1
 	}
 	// alone reports whether nothing but space stands before the token
 	// at index k on its line.
@@ -407,31 +441,30 @@ func Comment(f *token.File, off uint32) string {
 		}
 		return k < 0 || toks[k].Kind == token.Newline
 	}
-	var lines []string
-	block := false
 	switch toks[j].Kind {
 	case token.BlockComment:
-		if !alone(j) {
-			return ""
+		if alone(j) {
+			return j, j
 		}
-		lines, block = blockLines(f.Text(toks[j])), true
 	case token.LineComment:
 		// The run of // lines that ends here, each alone on its line.
-		for alone(j) {
-			lines = append([]string{strings.TrimPrefix(string(f.Text(toks[j])), "//")}, lines...)
+		if !alone(j) {
+			return -1, -1
+		}
+		last = j
+		for {
 			// The line above, when it is such a comment too.
 			k := j - 1
 			for ; k >= 0 && toks[k].Kind == token.Space; k-- {
 			}
-			if k < 1 || toks[k].Kind != token.Newline || toks[k-1].Kind != token.LineComment {
+			if k < 1 || toks[k].Kind != token.Newline || toks[k-1].Kind != token.LineComment || !alone(k-1) {
 				break
 			}
 			j = k - 1
 		}
-	default:
-		return ""
+		return j, last
 	}
-	return utf8Text(strings.Join(trimLines(lines, block), "\n"))
+	return -1, -1
 }
 
 // blockLines returns the lines of a block comment without its marks and

@@ -242,19 +242,19 @@ func TestHoverKfunProved(t *testing.T) {
 }
 
 // A wizard's checkout with a profile: a declaration in a stub is the
-// profile's, and has neither a line nor a comment; the kfuns the profile
-// says the driver has are there.
+// profile's, and has no line, but the comment the stub kept; the kfuns
+// the profile says the driver has are there.
 func TestHoverPartialCheckout(t *testing.T) {
 	p := &profile.Profile{
 		Manifest: profile.Manifest{
-			Name: "mini", Dialect: profile.Dialect{Driver: "dgd", Kfuns: []string{"int *rusage()"}},
+			Name: "mini", Dialect: profile.Dialect{Driver: "dgd", SlashSlash: true, Kfuns: []string{"int *rusage()"}},
 			IncludeDirs: []string{"/include"}, AutoObjects: []string{"/sys/auto"},
 			Covered: []string{"/std/", "/include/", "/sys/"},
 		},
 		Files: map[string]string{
 			"/include/std.h": "#define ROOM \"/std/room\"\n",
 			"/sys/auto.c":    "static void write(string s);\n",
-			"/std/room.c":    "inherit \"/std/object\";\nint room_var;\nvoid set_short(string s);\n",
+			"/std/room.c":    "inherit \"/std/object\";\n// Set by the room.\nint room_var;\n/*\n * Sets the short\n * description.\n */\nvoid set_short(string s);\n",
 			"/std/object.c":  "void create();\n",
 		},
 	}
@@ -272,8 +272,8 @@ func TestHoverPartialCheckout(t *testing.T) {
 		"#include <st|d.h>": "include std.h `#include <std.h>` @ profile mini, /include/std.h",
 		"inherit RO|OM":     "object /std/room @ profile mini, /std/room.c",
 		"::cre|ate()":       "function create `void create()` @ profile mini, /std/object.c",
-		"set_sh|ort":        "function set_short `void set_short(string s)` @ profile mini, /std/room.c",
-		"room_v|ar":         "variable room_var `int room_var` @ profile mini, /std/room.c",
+		"set_sh|ort":        "function set_short `void set_short(string s)` @ profile mini, /std/room.c // Sets the short\\ndescription.",
+		"room_v|ar":         "variable room_var `int room_var` @ profile mini, /std/room.c // Set by the room.",
 		"wri|te(":           "function write `static void write(string s)` @ auto object, profile mini, /sys/auto.c",
 		"rus|age":           "function rusage `int *rusage()` @ kfun, declared by the project (dialect.kfuns)",
 		"str|len":           "function strlen `int strlen(string)` @ kfun, DGD 1.7.9 // return the length of a string",
@@ -289,7 +289,7 @@ func TestHoverPartialCheckout(t *testing.T) {
 	// And what the calls take: a stub's declaration is one like another.
 	for at, want := range map[string]string{
 		"::create(|)":        "create #0 `void create()` @ profile mini, /std/object.c",
-		"set_short(|\"x\")":  "set_short #0 `void set_short(string s)` [string s] @ profile mini, /std/room.c",
+		"set_short(|\"x\")":  "set_short #0 `void set_short(string s)` [string s] @ profile mini, /std/room.c // Sets the short\\ndescription.",
 		"write(|\"x\")":      "write #0 `static void write(string s)` [string s] @ auto object, profile mini, /sys/auto.c",
 		"rusage(|)":          "rusage #0 `int *rusage()` @ kfun, declared by the project (dialect.kfuns)",
 		"strlen(|\"x\")":     "strlen #0 `int strlen(string)` [string] @ kfun, DGD 1.7.9 // return the length of a string",

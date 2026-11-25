@@ -241,7 +241,7 @@ func initializer(n int, kind func(int) token.Kind) bool {
 // Comment returns the comment that stands above the declaration at byte
 // offset off of the file at path (Comment), for an Item's Path and Off:
 // the documentation of one item, read when it is asked for. It is ""
-// when there is none, and for a profile's stub, which has no comments.
+// when there is none.
 func (r *Resolver) Comment(path string, off uint32) string {
 	if r.Tok == nil || r.s == nil || path == "" {
 		return ""
@@ -384,8 +384,9 @@ func (c *completer) names(sc *syntax.Scope) {
 		if defs := r.variable(name); len(defs) > 0 && defs[0].Var != nil {
 			d := &defs[0]
 			it := Item{Kind: Variable, Name: name, Detail: variableCode(d), Origin: r.origin(d.Path), Rank: c.rank(d)}
+			it.Path, it.Off = d.Path, d.Start
 			if it.Profile == "" {
-				it.Line, it.Path, it.Off = d.Var.Line, d.Path, d.Start
+				it.Line = d.Var.Line
 			}
 			c.add(it)
 		}
@@ -461,8 +462,9 @@ func (c *completer) function(d *Def) Item {
 	it.Auto = d.Auto
 	if d.Func != nil {
 		it.Detail, it.Args = d.Func.Decl, d.Func.MaxArgs != 0
+		it.Path, it.Off = d.Path, d.Start
 		if it.Profile == "" {
-			it.Line, it.Path, it.Off = d.Func.Line, d.Path, d.Start
+			it.Line = d.Func.Line
 		}
 	}
 	return it
