@@ -66,8 +66,9 @@ jobs:
           cache-dependency-path: editors/vscode/package-lock.json
       - run: npm ci
       - run: npm run check
-      - run: npm test
+      # The tests load the bundle, so it is built first.
       - run: npm run build
+      - run: npm test
 
   # The packages of the extension, made as a release makes them
   # (release.yml), from the binaries of a GoReleaser snapshot: one for

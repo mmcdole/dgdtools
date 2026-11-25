@@ -1,7 +1,7 @@
 {
   "name": "dgdtools",
-  "displayName": "DGD LPC (dgdtools)",
-  "description": "Language support for DGD LPC: highlighting, diagnostics, formatting, navigation, completion and rename.",
+  "displayName": "LPC (DGD)",
+  "description": "Language support for LPC (DGD), powered by the dgdtools language server: diagnostics, formatting, navigation, completion and rename.",
   "version": "0.0.1",
   "publisher": "mmcdole",
   "license": "MIT",
@@ -144,7 +144,7 @@
       },
       {
         "command": "dgdtools.associateFolder",
-        "title": "Use DGD LPC for This Folder's .c/.h Files",
+        "title": "Use LPC (DGD) for This Folder's .c/.h Files",
         "category": "dgdtools"
       },
       {
@@ -212,7 +212,7 @@
     }
   },
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --sourcemap --outfile=dist/extension.js",
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --main-fields=module,main --sourcemap --outfile=dist/extension.js",
     "check": "tsc -p .",
     "test": "node --test \"src/**/*.test.ts\" \"scripts/**/*.test.mts\"",
     "vscode:prepublish": "npm run check && npm run build -- --minify"
