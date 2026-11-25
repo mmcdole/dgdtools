@@ -337,7 +337,7 @@ func TestFormatProfileDialectAndConventions(t *testing.T) {
 	p := &profile.Profile{Manifest: profile.Manifest{
 		Format: profile.Format, Name: "test",
 		Dialect:     profile.Dialect{Language: "lpc", Driver: "dgd", SlashSlash: true, Closures: true},
-		Conventions: profile.Conventions{SpecifierMacros: []string{"visible"}},
+		Conventions: profile.Conventions{Macros: map[string]string{"visible": "specifier"}},
 	}}
 	data, err := p.Marshal()
 	require.NoError(t, err)

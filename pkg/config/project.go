@@ -81,10 +81,9 @@ func (prj *Project) NoLib() string {
 }
 
 // Inputs returns the files the project was resolved from: its config
-// file and the files that extends, the profile, the driver's
-// configuration. When one of them changes the project is another one,
-// and is resolved again (Workspace.Invalidate); a long-lived caller
-// watches them.
+// file, the profile, the driver's configuration. When one of them
+// changes the project is another one, and is resolved again
+// (Workspace.Invalidate); a long-lived caller watches them.
 func (prj *Project) Inputs() []string { return slices.Clone(prj.inputs) }
 
 // Tree returns where the project's lib is on disk.
@@ -280,7 +279,7 @@ func resolve(fs vfs.FS, opt DiscoverOptions, found, base string) (*Project, erro
 			return nil, err
 		}
 		prj.Config = c
-		prj.inputs = slices.Clone(c.Files)
+		prj.inputs = []string{prj.ConfigPath}
 		switch {
 		case c.Scope:
 			return nil, fmt.Errorf("%s is a settings scope (root: false), not a project's config", prj.ConfigPath)
@@ -330,7 +329,7 @@ func resolve(fs vfs.FS, opt DiscoverOptions, found, base string) (*Project, erro
 		if err := cfg.Validate(); err != nil {
 			return nil, fmt.Errorf("%s: %w", prof.Path, err)
 		}
-	} else if dc := cfg.ProfileBuild.DriverConfig; dc != "" && ref == "" {
+	} else if dc := cfg.DriverConfig; dc != "" && ref == "" {
 		// A whole lib with its build inputs at hand needs no profile.
 		if !filepath.IsAbs(dc) {
 			dc = filepath.Join(cfg.Dir, dc)
@@ -338,7 +337,7 @@ func resolve(fs vfs.FS, opt DiscoverOptions, found, base string) (*Project, erro
 		prj.inputs = append(prj.inputs, dc)
 		switch d, err := ReadDriverConfig(fs, dc); {
 		case err != nil:
-			if err := lenient(fmt.Errorf("profile_build.driver_config: %w", err)); err != nil {
+			if err := lenient(fmt.Errorf("driver_config: %w", err)); err != nil {
 				return nil, err
 			}
 		default:
@@ -586,24 +585,14 @@ func InferCheckout(dir string, patterns []string) (checkoutDir, lib string, ok b
 	return "", "", false
 }
 
-// applyProfile fills the config from a profile's manifest. Anything the
-// config sets itself wins; registries are merged.
+// applyProfile fills the config from a profile's manifest. The driver
+// settings are the profile's; of the rest, anything the config sets
+// itself wins, and registries are merged.
 func applyProfile(cfg *Config, p *profile.Profile) {
-	if len(cfg.IncludeDirs) == 0 {
-		cfg.IncludeDirs = p.IncludeDirs
-	}
-	if cfg.IncludeFile == "" {
-		cfg.IncludeFile = p.IncludeFile
-	}
-	if len(cfg.AutoObjects) == 0 {
-		cfg.AutoObjects = p.AutoObjects
-	}
-	if cfg.Create == "" {
-		cfg.Create = p.Create
-	}
-	if cfg.DriverObject == "" {
-		cfg.DriverObject = p.DriverObject
-	}
+	cfg.IncludeDirs = p.IncludeDirs
+	cfg.IncludeFile = p.IncludeFile
+	cfg.AutoObjects = p.AutoObjects
+	cfg.DriverObject = p.DriverObject
 	if cfg.RelativeObjectPaths == "" {
 		cfg.RelativeObjectPaths = p.RelativeObjectPaths
 	}
@@ -619,8 +608,8 @@ func applyProfile(cfg *Config, p *profile.Profile) {
 	// later is the one (kfun.Table.With).
 	cfg.Dialect.Kfuns = append(slices.Clone(p.Dialect.Kfuns), cfg.Dialect.Kfuns...)
 	own, c := &cfg.Conventions, p.Conventions
-	if len(own.SpecifierMacros) == 0 {
-		own.SpecifierMacros = c.SpecifierMacros
+	if own.Create == "" {
+		own.Create = c.Create
 	}
 	if len(own.AutosaveMarkers) == 0 {
 		own.AutosaveMarkers = c.AutosaveMarkers
@@ -632,7 +621,6 @@ func applyProfile(cfg *Config, p *profile.Profile) {
 	own.Defines = append(own.Defines, p.Dialect.Predefined...)
 	merge(&own.CallRegistry, c.CallRegistry)
 	merge(&own.ObjectRegistry, c.ObjectRegistry)
-	merge(&own.FormatRegistry, c.FormatRegistry)
 	merge(&own.Macros, c.Macros)
 }
 
@@ -649,12 +637,14 @@ func merge[V any](dst *map[string]V, src map[string]V) {
 }
 
 // DriverConfig holds the values the tools need from a DGD driver config.
+// Its create is not among them: what the lib's objects define is
+// conventions.create, which in a lib whose auto object receives the
+// driver's call is another function.
 type DriverConfig struct {
 	IncludeFile  string
 	IncludeDirs  []string
 	AutoObject   string
 	DriverObject string
-	Create       string
 	Typechecking *int
 }
 
@@ -699,8 +689,6 @@ func ReadDriverConfig(fs vfs.FS, path string) (*DriverConfig, error) {
 			dc.IncludeFile = str(vals[0])
 		case "auto_object":
 			dc.AutoObject = str(vals[0])
-		case "create":
-			dc.Create = str(vals[0])
 		case "driver_object":
 			dc.DriverObject = str(vals[0])
 		case "typechecking":
@@ -718,24 +706,16 @@ func ReadDriverConfig(fs vfs.FS, path string) (*DriverConfig, error) {
 	return dc, nil
 }
 
-// Apply fills what the config leaves unset from the driver config.
-// Explicit dgdtools.yml values always win.
+// Apply sets the config's driver settings to the driver config's. A
+// dialect.typechecking the file sets wins.
 func (dc *DriverConfig) Apply(cfg *Config) {
-	if len(cfg.IncludeDirs) == 0 {
-		cfg.IncludeDirs = dc.IncludeDirs
-	}
-	if cfg.IncludeFile == "" {
-		cfg.IncludeFile = dc.IncludeFile
-	}
-	if len(cfg.AutoObjects) == 0 && dc.AutoObject != "" {
+	cfg.IncludeDirs = dc.IncludeDirs
+	cfg.IncludeFile = dc.IncludeFile
+	cfg.AutoObjects = nil
+	if dc.AutoObject != "" {
 		cfg.AutoObjects = []string{dc.AutoObject}
 	}
-	if cfg.Create == "" {
-		cfg.Create = dc.Create
-	}
-	if cfg.DriverObject == "" {
-		cfg.DriverObject = dc.DriverObject
-	}
+	cfg.DriverObject = dc.DriverObject
 	if cfg.Dialect.Typechecking == nil {
 		cfg.Dialect.Typechecking = dc.Typechecking
 	}

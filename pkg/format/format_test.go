@@ -492,16 +492,15 @@ func TestGateComparesComments(t *testing.T) {
 
 func TestOptionsFor(t *testing.T) {
 	c := &config.Config{}
-	c.Conventions.SpecifierMacros = []string{"visible"}
 	c.Conventions.Defines = []string{"DEBUG"}
-	c.Conventions.Macros = map[string]string{"STATUS": "type"}
+	c.Conventions.Macros = map[string]string{"STATUS": "type", "visible": "specifier"}
 	o := OptionsFor(c, config.Format{IndentStyle: config.IndentTab, IndentWidth: 8, LineEndings: config.LineEndingsLF})
 	assert.Equal(t, Tabs, o.IndentStyle)
 	assert.Equal(t, 8, o.IndentWidth)
 	assert.Equal(t, LF, o.LineEndings)
 	assert.True(t, o.Defined["DEBUG"])
 	assert.True(t, o.Defined["__DGD__"])
-	assert.Equal(t, map[string]pp.Class{"visible": pp.ClassEmpty, "STATUS": pp.ClassType}, o.Macros)
+	assert.Equal(t, map[string]pp.Class{"visible": pp.ClassSpecifier, "STATUS": pp.ClassType}, o.Macros)
 
 	// Unset settings are the defaults.
 	o = OptionsFor(c, config.Format{})

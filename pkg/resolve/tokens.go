@@ -197,7 +197,7 @@ func (t *tokenizer) ident(ti int, path []syntax.Node) {
 				typ, mods = TokenTypeName, ModMacro
 			case pp.ClassSpecifier, pp.ClassEmpty:
 				// An empty macro in code stands where a specifier
-				// does (conventions.specifier_macros are empty ones).
+				// does, as does one conventions.macros classes so.
 				typ, mods = TokenModifier, ModMacro
 			}
 		}

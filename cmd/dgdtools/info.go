@@ -194,7 +194,6 @@ func configCmd(ctx context.Context, args []string, _ io.Reader, stdout, stderr i
 	}
 	fmt.Fprintf(w, "typechecking:  %s\n", tc)
 	fmt.Fprintf(w, "baseline:      %s\n", orNone(l.BaselinePath()))
-	fmt.Fprintf(w, "fail on:       %s\n", l.FailOn())
 	for _, n := range slices.Concat(prj.Notes, l.Index().Snapshot().Notes()) {
 		fmt.Fprintf(w, "note: %s\n", n.Message)
 	}

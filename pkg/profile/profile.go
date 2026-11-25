@@ -40,8 +40,10 @@ import (
 	"github.com/mmcdole/dgdtools/pkg/vfs"
 )
 
-// Format is the profile file format version.
-const Format = 1
+// Format is the profile file format version. Format 2 (dgdtools 0.4)
+// moved create into the conventions and dropped specifier_macros and
+// format_registry from them.
+const Format = 2
 
 // FileName is the default name of a locally built profile.
 const FileName = "dgdtools.profile"
@@ -68,12 +70,14 @@ type Dialect struct {
 // The same keys are the `conventions:` section of dgdtools.yml. Nothing
 // here has a default: a lib that does not say has none.
 type Conventions struct {
-	// SpecifierMacros are names that stand where a class specifier does
-	// and expand to nothing (a lib's `#define public`), for files read
-	// without the header that defines them.
-	SpecifierMacros []string `json:"specifier_macros,omitempty" yaml:"specifier_macros"`
+	// Create is the function the lib's objects are initialized by: the
+	// one the driver calls or, in a lib whose auto object receives that
+	// call and passes it on under another name (the kernel library's
+	// _F_create), the one the lib's objects define. Empty is "create".
+	Create string `json:"create,omitempty" yaml:"create"`
 	// Macros overrides the class the parser derives for a macro, by the
-	// class's name (pp.ClassNames).
+	// class's name (pp.ClassNames). A lib's `#define public`, for files
+	// read without the header that defines it, is {public: specifier}.
 	Macros map[string]string `json:"macros,omitempty" yaml:"macros"`
 	// Defines are names treated as defined when choosing #ifdef branches.
 	Defines []string `json:"defines,omitempty" yaml:"defines"`
@@ -82,8 +86,6 @@ type Conventions struct {
 	CallRegistry map[string]CallForms `json:"call_registry,omitempty" yaml:"call_registry"`
 	// ObjectRegistry maps path-taking functions to the argument index.
 	ObjectRegistry map[string]int `json:"object_registry,omitempty" yaml:"object_registry"`
-	// FormatRegistry maps scanf-style functions to their format argument.
-	FormatRegistry map[string]int `json:"format_registry,omitempty" yaml:"format_registry"`
 	// AutosaveMarkers are function or macro names whose mention marks an
 	// object as one that saves itself with save_object.
 	AutosaveMarkers []string `json:"autosave_markers,omitempty" yaml:"autosave_markers"`
@@ -163,7 +165,6 @@ type Manifest struct {
 	IncludeDirs         []string `json:"include_dirs,omitempty"`
 	IncludeFile         string   `json:"include_file,omitempty"`
 	AutoObjects         []string `json:"auto_objects,omitempty"`
-	Create              string   `json:"create,omitempty"`        // the function a new object is initialized by
 	DriverObject        string   `json:"driver_object,omitempty"` // whose functions the driver calls by name
 	RelativeObjectPaths string   `json:"relative_object_paths,omitempty"`
 
@@ -243,8 +244,11 @@ func Parse(data []byte) (*Profile, error) {
 	if _, err := fmt.Sscanf(string(head), magic+" %d", &format); err != nil {
 		return nil, fmt.Errorf("not a dgdtools profile")
 	}
-	if format != Format {
-		return nil, fmt.Errorf("profile format %d is not supported by this dgdtools (wants %d); rebuild the profile", format, Format)
+	switch {
+	case format < Format:
+		return nil, fmt.Errorf("profile format %d is from an older dgdtools (this one reads format %d): rebuild the profile with dgdtools profile build", format, Format)
+	case format > Format:
+		return nil, fmt.Errorf("profile format %d is from a newer dgdtools (this one reads format %d): update dgdtools", format, Format)
 	}
 	p := &Profile{Files: map[string]string{}}
 	body := rest

@@ -8,7 +8,9 @@ save_object writes is refused, and the reason says what overrules it.
 
 -- lib/dgdtools.yml --
 root: .
-include_dirs: [/include]
+driver_config: mud.dgd
+-- lib/mud.dgd --
+include_dirs = ({ "/include" });
 -- lib/include/std.h --
 #define LIVING "/std/living"
 -- lib/std/base.c --

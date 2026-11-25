@@ -5,7 +5,9 @@ quick fix that is not preferred (it may not be the file meant).
 
 -- lib/dgdtools.yml --
 root: .
-include_dirs: [/include]
+driver_config: mud.dgd
+-- lib/mud.dgd --
+include_dirs = ({ "/include" });
 -- lib/include/std.h --
 #define STD 1
 -- lib/players/ann/defs.h --

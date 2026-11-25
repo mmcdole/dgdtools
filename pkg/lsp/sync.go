@@ -338,8 +338,8 @@ func (s *server) covered(path string) bool {
 
 // watch is what the client was asked to watch beyond the patterns: the
 // files the projects in use are configured by that the patterns do not
-// have (a config a project extends, a profile in the user's directory,
-// the driver's configuration, a baseline somewhere else).
+// have (a profile in the user's directory, the driver's configuration, a
+// baseline somewhere else).
 type watch struct {
 	registered bool
 	id         int

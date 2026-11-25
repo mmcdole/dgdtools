@@ -29,23 +29,23 @@ func TestMaxPerFileCountsWhatIsShown(t *testing.T) {
 }
 `
 	prj, m := memProject(map[string]string{"obj/t.c": src})
-	prj.Config.Lint.Rules = map[string]config.RuleSettings{"no-effect-statement": {MaxPerFile: 2}}
+	two := lint.Options{MaxPerFile: 2}
 	lines := func(res *lint.Result) (out []int) {
 		for _, d := range res.Diagnostics {
 			out = append(out, d.Line)
 		}
 		return out
 	}
-	res := run(t, prj, m, lint.Request{Paths: []string{"/lib/obj/t.c"}})
+	res := run(t, prj, m, lint.Request{Paths: []string{"/lib/obj/t.c"}, Options: two})
 	assert.Equal(t, []int{4, 5}, lines(res), "the first two that no comment suppresses")
 	assert.Equal(t, 2, res.Stats.Suppressed)
 	assert.Equal(t, 2, res.Stats.Capped)
 
-	// The command line's limit wins; a negative one lifts every limit.
 	res = run(t, prj, m, lint.Request{Paths: []string{"/lib/obj/t.c"}, Options: lint.Options{MaxPerFile: 3}})
 	assert.Equal(t, []int{4, 5, 6}, lines(res))
 	assert.Equal(t, 1, res.Stats.Capped)
-	res = run(t, prj, m, lint.Request{Paths: []string{"/lib/obj/t.c"}, Options: lint.Options{MaxPerFile: -1}})
+	// No limit, unless one is given.
+	res = run(t, prj, m, lint.Request{Paths: []string{"/lib/obj/t.c"}})
 	assert.Equal(t, []int{4, 5, 6, 7}, lines(res))
 	assert.Zero(t, res.Stats.Capped)
 
@@ -58,7 +58,7 @@ func TestMaxPerFileCountsWhatIsShown(t *testing.T) {
 	data, err := lint.NewBaseline(l.BaselinePath(), res.Diagnostics[:3]).Marshal()
 	require.NoError(t, err)
 	m[l.BaselinePath()] = string(data)
-	res = run(t, prj, m, lint.Request{Paths: []string{"/lib/obj/t.c"}})
+	res = run(t, prj, m, lint.Request{Paths: []string{"/lib/obj/t.c"}, Options: two})
 	assert.Equal(t, []int{7}, lines(res), "one finding is new; the limit of two does not hide it")
 	assert.Equal(t, 3, res.Stats.Baselined)
 	assert.Zero(t, res.Stats.Capped)
@@ -67,8 +67,8 @@ func TestMaxPerFileCountsWhatIsShown(t *testing.T) {
 	// against the limit either.
 	guess := "#include \"gone.h\"\nvoid f() {\n#ifdef UNKNOWN\n    x = \"a\" \"b\";\n#endif\n    y = \"c\" \"d\";\n    z = \"e\" \"f\";\n}\n"
 	prj, m = memProject(map[string]string{"obj/g.c": guess})
-	prj.Config.Lint.Rules = map[string]config.RuleSettings{"adjacent-strings": {MaxPerFile: 1}, "include-not-found": {Severity: "off"}}
-	res = run(t, prj, m, lint.Request{Paths: []string{"/lib/obj/g.c"}})
+	prj.Config.Lint.Rules = map[string]config.RuleSettings{"include-not-found": {Severity: "off"}}
+	res = run(t, prj, m, lint.Request{Paths: []string{"/lib/obj/g.c"}, Options: lint.Options{MaxPerFile: 1}})
 	assert.Equal(t, []int{6}, lines(res))
 	assert.Equal(t, 1, res.Stats.GuessedBranch)
 	assert.Equal(t, 1, res.Stats.Capped)

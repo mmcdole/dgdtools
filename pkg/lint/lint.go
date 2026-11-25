@@ -28,7 +28,6 @@
 package lint
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -92,7 +91,7 @@ type Rule struct {
 	// Options returns the rule's options at their defaults: a pointer to
 	// a struct whose fields carry the option's key as yaml tag and what
 	// it is for as doc tag. Those are the keys the rule's mapping in
-	// lint.rules may have besides severity and max_per_file; a rule
+	// lint.rules may have besides severity; a rule
 	// without Options has none. Run finds the file's options in
 	// Pass.Options.
 	Options func() any
@@ -209,9 +208,8 @@ type Options struct {
 	// NoBaseline reports findings recorded in the baseline too.
 	NoBaseline bool
 	// MaxPerFile reports at most that many findings of one rule in one
-	// file, whatever the configuration says; 0 leaves it to the
-	// configuration (max_per_file), and a negative number lifts every
-	// limit. What a limit holds back is counted (Stats.Capped).
+	// file; 0 or a negative number is no limit. What the limit holds
+	// back is counted (Stats.Capped).
 	MaxPerFile int
 	// NoScan keeps the lint from starting the whole-lib scan, which the
 	// first question about who inherits a file needs and which takes
@@ -235,7 +233,7 @@ type Stats struct {
 	Files      int `json:"files"`
 	Suppressed int `json:"suppressed"` // by dgdtools-ignore comments
 	Baselined  int `json:"baselined"`
-	Capped     int `json:"capped"` // over a max_per_file limit; not reported
+	Capped     int `json:"capped"` // over the MaxPerFile limit; not reported
 
 	// Unknowns: facts the linter could not establish and therefore drew
 	// no conclusions from.
@@ -521,7 +519,6 @@ type Linter struct {
 	layerIDs  atomic.Int32
 	registry  *calls.Registry
 	kfuns     *kfun.Table
-	failOn    diag.Severity
 
 	baselines sync.Map // path -> *baselineFile
 }
@@ -548,7 +545,7 @@ func New(prj *config.Project, fsys vfs.FS, opts ...LinterOption) (*Linter, error
 	for _, opt := range opts {
 		opt(&o)
 	}
-	l := &Linter{project: prj, fs: fsys, rules: Rules(), byKey: map[string][]*Rule{}, failOn: diag.Error}
+	l := &Linter{project: prj, fs: fsys, rules: Rules(), byKey: map[string][]*Rule{}}
 	for _, r := range l.rules {
 		l.byKey[r.Name] = []*Rule{r}
 		l.byKey[strings.ToUpper(r.Code)] = []*Rule{r}
@@ -574,9 +571,6 @@ func New(prj *config.Project, fsys vfs.FS, opts ...LinterOption) (*Linter, error
 	cfg := prj.Config
 	if err := cfg.Validate(); err != nil {
 		return nil, err
-	}
-	if cfg.Lint.FailOn != "" {
-		l.failOn, _ = diag.ParseSeverity(cfg.Lint.FailOn)
 	}
 	var err error
 	if l.base, err = l.newLayer(cfg.Path, "lint.rules", nil, cfg.Lint.Rules); err != nil {
@@ -880,7 +874,7 @@ func (l *Linter) lintFile(ctx context.Context, s *index.Snapshot, file string, s
 		Tok: parsed.Tok, Tree: parsed.Tree, Env: parsed.Env, Unit: u, Snapshot: s, Registry: l.registry, Kfuns: l.kfuns,
 	})
 	doc.markers = l.project.Config.Conventions.AutosaveMarkers
-	doc.create = cmp.Or(l.project.Config.Create, defaultCreate)
+	doc.create = l.project.Config.Create()
 	doc.driver = strings.TrimSuffix(l.project.Config.DriverObject, ".c")
 	rel, _ := l.project.Tree().Rel(file) // the file's lib-relative name
 	rules, err := sel.rules(file, rel, set)
@@ -914,7 +908,6 @@ func (l *Linter) lintFile(ctx context.Context, s *index.Snapshot, file string, s
 	local := opt.Local || !l.project.HasLib() || u.LibPath == ""
 	shared.sup, shared.ran = l.suppressions(parsed.Tok), map[string]bool{}
 	var ds []diag.Diagnostic
-	limits := map[string]int{}
 	for _, late := range []bool{false, true} {
 		for i := range rules {
 			a, r := &rules[i], rules[i].rule
@@ -923,9 +916,6 @@ func (l *Linter) lintFile(ctx context.Context, s *index.Snapshot, file string, s
 			}
 			if ctx.Err() != nil {
 				break
-			}
-			if limits[r.Name] = opt.MaxPerFile; opt.MaxPerFile == 0 {
-				limits[r.Name] = a.maxPerFile
 			}
 			var out []*diag.Diagnostic
 			pass := &Pass{
@@ -969,7 +959,7 @@ func (l *Linter) lintFile(ctx context.Context, s *index.Snapshot, file string, s
 	}
 	shown, kept := map[string]int{}, ds[:0]
 	for _, d := range ds {
-		if limit := limits[d.Rule]; limit > 0 && shown[d.Rule] == limit {
+		if limit := opt.MaxPerFile; limit > 0 && shown[d.Rule] == limit {
 			stats.capped++
 			continue
 		}
@@ -1039,10 +1029,6 @@ func RuleByName(key string) *Rule {
 	}
 	return nil
 }
-
-// FailOn returns the severity at and above which the project's findings
-// fail a run: lint.fail_on, error when the configuration does not say.
-func (l *Linter) FailOn() diag.Severity { return l.failOn }
 
 // plural says how many of a thing there are: "1 file", "2 files".
 func plural(n int, thing string) string {

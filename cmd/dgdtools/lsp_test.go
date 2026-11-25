@@ -50,7 +50,8 @@ func server(t *testing.T, args ...string) (*lsptest.Client, *strings.Builder) {
 // lspLib is a lib with findings of several rules, related locations
 // in other files, and text that is not ASCII.
 var lspLib = map[string]string{
-	"dgdtools.yml":   "root: .\ninclude_dirs: [/include]\nauto_objects: [/sys/auto]\nlint:\n  rules:\n    unused-suppression: warning\n",
+	"dgdtools.yml":   "root: .\ndriver_config: mud.dgd\nlint:\n  rules:\n    unused-suppression: warning\n",
+	"mud.dgd":        "include_dirs = ({ \"/include\" });\nauto_object = \"/sys/auto\";\n",
 	"include/std.h":  "#define STD \"/std/base\"\n",
 	"sys/auto.c":     "void autof() {}\n",
 	"std/base.c":     "void create() {}\nint foo(int a) { return a; }\nstatic void sfn() {}\n",

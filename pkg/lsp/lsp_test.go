@@ -59,7 +59,8 @@ func start(t testing.TB) *lsptest.Client {
 // lib is a small lib with every kind of edge between its files.
 func lib() map[string]string {
 	return map[string]string{
-		"dgdtools.yml":   "root: .\ninclude_dirs: [/include]\ninclude_file: /include/auto.h\nauto_objects: [/sys/auto]\n",
+		"dgdtools.yml":   "root: .\ndriver_config: mud.dgd\n",
+		"mud.dgd":        "include_dirs = ({ \"/include\" });\ninclude_file = \"/include/auto.h\";\nauto_object = \"/sys/auto\";\n",
 		"include/auto.h": "#define AUTO 1\n",
 		"include/std.h":  "#define STD \"/std/base\"\n",
 		"sys/auto.c":     "void autof() {}\n",
@@ -325,8 +326,8 @@ func TestDependents(t *testing.T) {
 // project is configured by: each change reaches the diagnostics.
 func TestWatchedFiles(t *testing.T) {
 	files := lib()
-	files["dgdtools.yml"] = "extends: ../shared/base.yml\n" + files["dgdtools.yml"]
-	files["../shared/base.yml"] = "lint:\n  rules:\n    callback-arity: error\n"
+	files["dgdtools.yml"] = "root: .\ndriver_config: ../shared/mud.dgd\n"
+	files["../shared/mud.dgd"] = files["mud.dgd"]
 	dir := filepath.Join(tree(t, map[string]string{"lib/x": ""}), "lib")
 	write(t, dir, files)
 	path := func(rel string) string { return filepath.Join(dir, rel) }
@@ -359,9 +360,9 @@ func TestWatchedFiles(t *testing.T) {
 	assert.NotContains(t, fmt.Sprint(check("obj/a.c", "std is back")), "does not exist")
 
 	// What the project is configured by is watched too, where the
-	// patterns do not reach: the config it extends, outside the folder.
-	base := filepath.Join(filepath.Dir(dir), "shared", "base.yml")
-	assert.Contains(t, c.Watchers(), lsptest.URI(filepath.Dir(base))+" base.yml")
+	// patterns do not reach: the driver's config, outside the folder.
+	drv := filepath.Join(filepath.Dir(dir), "shared", "mud.dgd")
+	assert.Contains(t, c.Watchers(), lsptest.URI(filepath.Dir(drv))+" mud.dgd")
 	assert.Len(t, c.Watchers(), 7, "the patterns, and that")
 	sev := func() int {
 		for _, f := range check("obj/a.c", "") {
@@ -371,11 +372,16 @@ func TestWatchedFiles(t *testing.T) {
 		}
 		return 0
 	}
-	require.Equal(t, lsp.SeverityError, sev())
+	require.Equal(t, lsp.SeverityWarning, sev())
+	before := check("obj/a.c", "the driver's config as it was")
 	c.Idle()
-	require.NoError(t, os.WriteFile(base, []byte("lint:\n  rules:\n    callback-arity: info\n"), 0o644))
-	c.WatchedFiles(2, base)
-	assert.Equal(t, lsp.SeverityInformation, sev(), "the base configuration changed")
+	require.NoError(t, os.WriteFile(drv, []byte("include_dirs = ({ \"/nowhere\" });\n"), 0o644))
+	c.WatchedFiles(2, drv)
+	assert.NotEqual(t, before, check("obj/a.c", "the driver's config changed"))
+	c.Idle()
+	require.NoError(t, os.WriteFile(drv, []byte(files["mud.dgd"]), 0o644))
+	c.WatchedFiles(2, drv)
+	assert.Equal(t, before, check("obj/a.c", "and changed back"))
 
 	// The project's own configuration: a rule is turned off, for every
 	// open document; a configuration that is not valid is said to be,
@@ -387,7 +393,8 @@ func TestWatchedFiles(t *testing.T) {
 	c.WatchedFiles(2, path("dgdtools.yml"))
 	assert.NotContains(t, rules(check("obj/c.c", "a rule off")), "target-object-missing")
 	assert.Equal(t, 0, sev())
-	assert.Len(t, c.Watchers(), 6, "the base is no longer one of the project's files")
+	assert.NotContains(t, c.Watchers(), lsptest.URI(filepath.Dir(drv))+" mud.dgd", "the driver's config outside is no longer one of the project's files")
+	assert.Contains(t, c.Watchers(), lsptest.URI(dir)+" mud.dgd", "the one in the folder is")
 	files["dgdtools.yml"] = whole
 
 	c.Idle()

@@ -79,10 +79,11 @@ func (w *world) at(path, at string) string {
 	return out
 }
 
+// driverConfig is the driver's config file of the libs of these tests.
+const driverConfig = "include_file = \"/include/auto.h\";\ninclude_dirs = ({ \"/include\" });\nauto_object = \"/sys/auto\";\n"
+
 const config1 = `root: .
-include_dirs: [/include]
-include_file: /include/auto.h
-auto_objects: [/sys/auto]
+driver_config: ../mud.dgd
 conventions:
   call_registry:
     add_action: { function: 0 }
@@ -94,6 +95,7 @@ conventions:
 func wholeLib() vfs.Mem {
 	return vfs.Mem{
 		"/lib/dgdtools.yml":   config1,
+		"/mud.dgd":            driverConfig,
 		"/lib/include/auto.h": "#define AUTO 1\n",
 		"/lib/include/std.h": "#define STD \"/std/base\"\n#define ROOM_D \"/sys/roomd\"\n" +
 			"#  define /* squares */ SQUARE(x) ((x)*(x))\n#define ME this_object()\n#define status int\n",
@@ -488,7 +490,8 @@ func TestNothingToAsk(t *testing.T) {
 // a call does.
 func TestFunctionPointer(t *testing.T) {
 	fs := vfs.Mem{
-		"/lib/dgdtools.yml": "root: .\ndialect: {closures: true}\nauto_objects: [/sys/auto]\n",
+		"/lib/dgdtools.yml": "root: .\ndriver_config: mud.dgd\ndialect: {closures: true}\n",
+		"/lib/mud.dgd":      "auto_object = \"/sys/auto\";\n",
 		"/lib/sys/auto.c":   "void autof() {}\n",
 		"/lib/obj/a.c":      "int twice(int a) { return a * 2; }\nvoid f() { function g; g = &twice(); g = &autof(); g = &nope(); (*g)(1); }\n",
 	}

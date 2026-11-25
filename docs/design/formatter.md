@@ -145,7 +145,7 @@ Two things that could be options are the house style instead:
   nothing. A knob for it has no user: nobody's style depends on three.
 
 The dialect (`//` comments, closures) and the macro conventions
-(`conventions.specifier_macros`, `conventions.macros`) are not format
+(`conventions.macros`, `conventions.defines`) are not format
 options. They are facts about the project, they come from the project's
 configuration or its profile, and the formatter reads them like every
 other tool.

@@ -191,12 +191,11 @@ func TestLintSelectionAndFailOn(t *testing.T) {
 
 	code, _, _ = dgdtools(t, "", "lint", "--fail-on", "warning", file)
 	assert.Equal(t, 1, code)
-	// The flag wins over the configuration, either way.
+	// The configuration has no say: the threshold is the run's.
 	write(t, dir, map[string]string{"dgdtools.yml": "root: .\nlint: {fail_on: warning}\n"})
-	code, _, _ = dgdtools(t, "", "lint", file)
-	assert.Equal(t, 1, code)
-	code, _, _ = dgdtools(t, "", "lint", "--fail-on", "error", file)
-	assert.Equal(t, 0, code)
+	code, _, errs := dgdtools(t, "", "lint", file)
+	assert.Equal(t, 2, code)
+	assert.Contains(t, errs, "line 2: lint.fail_on removed: pass --fail-on to dgdtools lint")
 	write(t, dir, map[string]string{"dgdtools.yml": "root: .\n"})
 
 	_, out, _ = dgdtools(t, "", "lint", "--select", "S002", file)
@@ -210,7 +209,7 @@ func TestLintSelectionAndFailOn(t *testing.T) {
 	assert.NotContains(t, out, "no-effect-statement")
 	assert.Contains(t, out, "[C002 missing-visibility]")
 
-	code, _, errs := dgdtools(t, "", "lint", "--select", "bogus", file)
+	code, _, errs = dgdtools(t, "", "lint", "--select", "bogus", file)
 	assert.Equal(t, 2, code)
 	assert.Contains(t, errs, "unknown rule \"bogus\" (see `dgdtools rules`)")
 	code, _, errs = dgdtools(t, "", "lint", "--fail-on", "fatal", file)
@@ -225,7 +224,7 @@ func TestLintSelectionAndFailOn(t *testing.T) {
 func TestLintSettingsScopes(t *testing.T) {
 	const bare = "int f() { return 1; }\n"
 	dir := tree(t, map[string]string{
-		"dgdtools.yml":             "root: .\nlint:\n  rules: {missing-visibility: warning}\n  fail_on: error\n",
+		"dgdtools.yml":             "root: .\nlint:\n  rules: {missing-visibility: warning}\n",
 		"std/a.c":                  bare,
 		"players/ann/dgdtools.yml": "root: false\nlint:\n  rules: {missing-visibility: error}\n",
 		"players/ann/b.c":          bare,
@@ -248,10 +247,10 @@ func TestLintSettingsScopes(t *testing.T) {
 	assert.Equal(t, 1, strings.Count(out, "\n"))
 
 	// A project key in a scope is an error, and names the file.
-	write(t, dir, map[string]string{"players/bob/dgdtools.yml": "root: false\ninclude_dirs: [/x]\n"})
+	write(t, dir, map[string]string{"players/bob/dgdtools.yml": "root: false\ndriver_config: mud.dgd\n"})
 	code, _, errs = dgdtools(t, "", "lint", dir)
 	assert.Equal(t, 2, code)
-	assert.Contains(t, errs, filepath.Join(dir, "players/bob/dgdtools.yml")+": include_dirs belongs in the project's root config")
+	assert.Contains(t, errs, filepath.Join(dir, "players/bob/dgdtools.yml")+": driver_config belongs in the project's root config")
 	// So is a rule that does not exist.
 	write(t, dir, map[string]string{"players/bob/dgdtools.yml": "root: false\nlint:\n  rules: {nope: off}\n"})
 	code, _, errs = dgdtools(t, "", "lint", dir)
@@ -339,7 +338,8 @@ func TestProfileCommands(t *testing.T) {
 	assert.Contains(t, errs, "dgdtools profile: want build, or show [NAME|FILE] [LIBPATH]\nsee `dgdtools profile -h`")
 
 	dir := tree(t, map[string]string{
-		"dgdtools.yml":            "root: lib\nprofile_build:\n  name: tiny\n  share: [\"std/**\"]\n  checkouts: [\"players/*\"]\ninclude_dirs: [/std/include]\n",
+		"dgdtools.yml":            "root: lib\ndriver_config: mud.dgd\nprofile_build:\n  name: tiny\n  share: [\"std/**\"]\n  checkouts: [\"players/*\"]\n",
+		"mud.dgd":                 "include_dirs = ({ \"/std/include\" });\n",
 		"lib/std/include/m.h":     "#define I_BASE \"/std/base\"\n",
 		"lib/std/base.c":          "void create() { }\nint query(int a) { return a; }\n",
 		"lib/players/x/ignored.c": "void f() { }\n",

@@ -345,7 +345,7 @@ func loadScope(fs vfs.FS, path string) (*Config, error) {
 		return Load(fs, path)
 	}
 	c := &Config{}
-	if err := loadInto(fs, path, c, map[string]bool{}); err != nil {
+	if err := loadInto(fs, path, c); err != nil {
 		return nil, err
 	}
 	c.Dir, c.Path, c.Scope = filepath.Dir(path), path, true

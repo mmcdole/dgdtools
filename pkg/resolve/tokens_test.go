@@ -103,7 +103,8 @@ func TestTokens(t *testing.T) {
 
 func TestTokensOfEachKind(t *testing.T) {
 	fs := vfs.Mem{
-		"/lib/dgdtools.yml": "root: .\ndialect: {closures: true}\nauto_objects: [/sys/auto]\nconventions: {specifier_macros: [public]}\n",
+		"/lib/dgdtools.yml": "root: .\ndriver_config: mud.dgd\ndialect: {closures: true}\nconventions: {macros: {public: specifier}}\n",
+		"/lib/mud.dgd":      "auto_object = \"/sys/auto\";\n",
 		"/lib/sys/auto.c":   "void autof() {}\n",
 		"/lib/std/base.c":   "static int hidden;\nint shown;\nstatic void sfn() {}\n",
 		"/lib/obj/a.c": `inherit "/std/base";
@@ -153,7 +154,7 @@ private int p();
 17:13 p function declaration`
 	assert.Equal(t, want, w.tokens("/lib/obj/a.c"))
 	// Without closures `function` is a name like any other.
-	fs["/lib/dgdtools.yml"] = "auto_objects: [/sys/auto]\n"
+	fs["/lib/dgdtools.yml"] = "driver_config: mud.dgd\n"
 	fs["/lib/obj/a.c"] = "void f() { int function; function = 1; }\n"
 	w = newWorld(t, fs, "/lib")
 	assert.Equal(t, "1:6 f function definition\n1:16 function variable declaration,local\n1:26 function variable local", w.tokens("/lib/obj/a.c"))

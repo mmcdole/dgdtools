@@ -6,7 +6,9 @@ is asked for; and what a trigger character gets where it begins nothing.
 
 -- lib/dgdtools.yml --
 root: .
-include_dirs: [/include]
+driver_config: mud.dgd
+-- lib/mud.dgd --
+include_dirs = ({ "/include" });
 -- lib/include/std.h --
 #define BASE "/std/base"
 -- lib/include/sys/types.h --

@@ -45,22 +45,19 @@ errors.
 
 ```yaml
 # Project keys: what the project is. Root config only.
-root: lib                  # the directory that is "/" to the driver (default: this file's directory)
+root: lib                  # the directory that is "/" to the driver
 profile: mylib             # the mudlib profile, for a partial checkout
 lib_path: /usr/name        # where a partial checkout sits in the lib
 exclude: ["attic/**"]
-dialect: {slash_slash: true, closures: false, typechecking: 2}
+driver_config: etc/mud.dgd # the DGD driver's config file
+dialect: {slash_slash: true, closures: false}
 # dialect.kfuns: ["int *rusage()"]   the kfuns of the driver's extension modules
-include_dirs: ["/include"] # what the driver's config says
-include_file: /include/std.h
-auto_objects: [/kernel/lib/auto]
-create: _F_create
-driver_object: /kernel/sys/driver   # whose functions the driver calls by name
 relative_object_paths: file
 conventions:               # the lib's habits: macros, registries; no defaults
-  specifier_macros: [public]
+  create: create           # what the lib's objects define (default create)
+  macros: {public: specifier}
   call_registry: {subscribe: {function: 1}}
-profile_build: {driver_config: etc/mud.dgd}
+profile_build: {name: mylib, share: ["kernel/**"], checkouts: ["usr/*"]}
 
 # Settings: how files are formatted and linted. Any scope.
 format:
@@ -70,21 +67,45 @@ format:
 lint:
   rules: {raw-inherit-path: warning}
   overrides:
-    - paths: ["legacy/**"]
+    - paths: ["usr/**"]
       rules: {lifecycle-chain: off}
-  fail_on: error           # root config only: one threshold per run
   baseline: dgdtools-baseline.json   # root config only
 ```
 
-The top level holds the project keys; they are the same facts a profile's
-manifest carries, under the same names, and what the file sets wins over
-the profile. `lint:` and `format:` hold settings and nothing else. The
-split is the point: everything under the two sections can differ per
-directory, nothing above them can.
+The top level holds the project keys; `lint:` and `format:` hold
+settings and nothing else. The split is the point: everything under the
+two sections can differ per directory, nothing above them can.
 
-`extends:` names files to start from (resolved relative to the extending
-file; scalars and lists replace, maps merge). It is explicit sharing and
-works at any level.
+**The driver's settings have one source**, the driver's own config file:
+`driver_config` names it, and `include_dirs`, `include_file`,
+`auto_object`, `driver_object` and `typechecking` are read from it, for
+a whole-lib lint and for a profile build alike. They are not keys of
+`dgdtools.yml`: a second place to state them is a second place for them
+to be wrong. A partial checkout has no driver config; it gets them from
+its profile, which carries what the build read. (`dialect.typechecking`
+is the one that can still be said in the file, for a lib without a
+driver config at hand; the file's word wins.) The driver config's
+`create` is not read: it is what the auto object receives, and in a lib
+whose auto object passes it on (the kernel library's `_F_create`), what
+objects define is `conventions.create`, default `create`.
+
+There is no `extends:`. Per-directory settings are nested files (section
+3), and what a mudlib shares with its wizards is its profile; the two
+cover what including another config file was for, without a merge rule
+to learn.
+
+Keys of dgdtools before 0.4 are errors that say what replaced them
+(`profile_build.driver_config moved: use top-level driver_config`,
+`include_dirs removed: dgdtools reads it from driver_config ...`,
+`conventions.specifier_macros removed: use conventions.macros: { public:
+specifier }`), not merely unknown keys. The removed ones:
+`extends`, `include_dirs`, `include_file`, `auto_objects`,
+`driver_object`, top-level `create` (now `conventions.create`),
+`profile_build.driver_config` (now `driver_config`),
+`conventions.specifier_macros`, `conventions.format_registry` (sscanf is
+built in), a rule's `max_per_file` (`--max-per-file` is the run's), and
+`lint.fail_on` (`--fail-on` is the run's). Any other unknown key is an
+error with the nearest real key suggested.
 
 ## 3. Projects and settings scopes
 
@@ -102,8 +123,8 @@ A `dgdtools.yml` is one of two things.
   those files belong to. Any other key in it is an error naming the key
   (`usr/ann/dgdtools.yml: exclude belongs in the project's root
   config; this file is a settings scope (root: false) and holds only
-  lint.rules, lint.overrides and format`), and so are `lint.fail_on` and
-  `lint.baseline`, which describe a run, not a file. (`root:` is the lib
+  lint.rules, lint.overrides and format`), and so is `lint.baseline`,
+  which describes a run, not a file. (`root:` is the lib
   root's directory in a root config; the one value that is not a
   directory, `false`, says there is none. A directory really called
   "false" is written `"false"`; `root: true` is an error.)
@@ -213,7 +234,8 @@ Highest first:
 2. the nearest settings scope that sets the key, then outer ones;
 3. the project's root config (or `--config FILE`; or, when there is
    neither, the user-level config);
-4. the profile, for project keys the config leaves unset;
+4. the profile (the driver's settings; the dialect and conventions the
+   config leaves unset);
 5. `.editorconfig`, for the three format keys;
 6. built-in defaults.
 
@@ -262,8 +284,8 @@ directory and is safe for concurrent use. Under a long-lived server a
 `Workspace` is told what changed (`session.Session` does it): a
 `dgdtools.yml` drops the project it is the root config of and the
 projects it is, or may now be, a settings scope of, and one of a
-project's other inputs (a file it extends, its profile, the driver's
-configuration) drops that project; each is resolved again, as a new
+project's other inputs (its profile, the driver's configuration) drops
+that project; each is resolved again, as a new
 value, when next asked for. An `.editorconfig` is read again by every
 project. `pkg/editorconfig` is the parser (sections, the glob forms of
 the specification, `root = true`, `unset`).
@@ -309,7 +331,7 @@ dgdtools version
   (`--config`, `--no-config`, `--root`, `--profile`, `--lib-path`) are
   the same wherever a project is needed.
 - **Exit codes**, every subcommand: 0 success; 1 the thing looked for
-  was found (lint findings at or above `fail_on`; files that
+  was found (lint findings at or above `--fail-on`; files that
   `format --check` would change); 2 usage, configuration or I/O error.
 - **Front ends are thin.** Each subcommand is
   `func(ctx, args, stdin, stdout, stderr) int` over the libraries: it

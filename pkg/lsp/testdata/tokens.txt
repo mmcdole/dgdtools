@@ -10,9 +10,11 @@ a document's tokens.
 
 -- lib/dgdtools.yml --
 root: .
-include_dirs: [/include]
-auto_objects: [/sys/auto]
+driver_config: mud.dgd
 dialect: {closures: true}
+-- lib/mud.dgd --
+include_dirs = ({ "/include" });
+auto_object = "/sys/auto";
 -- lib/include/std.h --
 #define BASE "/std/base"
 #define status int

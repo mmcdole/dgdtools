@@ -30,11 +30,10 @@ type setting struct {
 	rules []*Rule
 	// rank orders the entries of one mapping, least specific first: 0
 	// for all, 1 for a group, 2 for one rule.
-	rank       int
-	off        bool
-	severity   *diag.Severity // nil: the entry gives none
-	maxPerFile int
-	options    map[string]any // of the one rule; checked
+	rank     int
+	off      bool
+	severity *diag.Severity // nil: the entry gives none
+	options  map[string]any // of the one rule; checked
 }
 
 // layer is a rules mapping and the files it is for.
@@ -74,7 +73,7 @@ func (l *Linter) newLayer(file, where string, match *fileset.Matcher, m map[stri
 		if rules == nil {
 			return nil, fail("unknown rule %q (see `dgdtools rules`)", key)
 		}
-		s := setting{rules: rules, rank: 2, maxPerFile: rs.MaxPerFile}
+		s := setting{rules: rules, rank: 2}
 		switch {
 		case key == "all":
 			s.rank = 0
@@ -225,10 +224,9 @@ func (l *Linter) layersOf(sc *config.Scope) ([]*layer, error) {
 
 // active is one rule as it runs on a file.
 type active struct {
-	rule       *Rule
-	severity   diag.Severity
-	maxPerFile int // 0: no limit
-	options    any // what rule.Options returned, with the file's settings
+	rule     *Rule
+	severity diag.Severity
+	options  any // what rule.Options returned, with the file's settings
 }
 
 // selection is the rules of one lint call: for each file, the configured
@@ -330,9 +328,6 @@ func (s *selection) resolve(layers []*layer) []active {
 					a.on = false
 				case e.severity != nil:
 					a.on, a.severity = true, *e.severity
-				}
-				if e.maxPerFile > 0 {
-					a.maxPerFile = e.maxPerFile
 				}
 				r.setOptions(a.options, e.options) // newLayer has checked them
 			}

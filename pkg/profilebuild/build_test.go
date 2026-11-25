@@ -24,9 +24,9 @@ import (
 func wholeLib() vfs.Mem {
 	return vfs.Mem{
 		"/mud/dgdtools.yml": `root: lib
+driver_config: etc/mud.dgd
 profile_build:
   name: mini
-  driver_config: etc/mud.dgd
   share: ["std/**", "secure/**"]
   omit: ["secure/private/**"]
   checkouts: ["players/*", "d/*"]
@@ -105,7 +105,7 @@ func TestProfileBuildAndPartialCheckout(t *testing.T) {
 	assert.Equal(t, 1, *p.Dialect.Typechecking)
 	assert.Equal(t, []string{"/std/include"}, p.IncludeDirs)
 	assert.Equal(t, "/sys/forced.h", p.IncludeFile)
-	assert.Equal(t, "create", p.Create)
+	assert.Empty(t, p.Conventions.Create, "the default, create")
 	assert.Equal(t, "/sys/driver", p.DriverObject)
 	assert.Equal(t, map[string]profile.CallForms{"add_action": {{Function: 0}}}, p.Conventions.CallRegistry)
 	assert.Equal(t, []string{"/secure/", "/std/", "/std/include/"}, p.Covered)
@@ -343,12 +343,13 @@ func TestStubLocations(t *testing.T) {
 	assert.Equal(t, p.Files[libFile], prj.Profile.Files["/std/room.c"], "the location names the stub")
 }
 
-// What a new object is initialized by is a fact about the lib: a lib
-// whose auto object passes the driver's call on under another name says
-// so in its configuration, and its profile tells the checkouts.
+// What a new object is initialized by is a convention of the lib: a lib
+// whose objects define another function than create says so in its
+// configuration, and its profile tells the checkouts. The driver config's
+// create is what the auto object receives, and is not it.
 func TestProfileCarriesTheCreateFunction(t *testing.T) {
 	m := vfs.Mem{
-		"/mud/dgdtools.yml":        "root: lib\ncreate: setup\ndialect:\n  kfuns: [\"int *rusage()\", \"int strlen(string s)\"]\nprofile_build:\n  name: m\n  driver_config: mud.dgd\n  share: [\"std/**\"]\n  checkouts: [\"usr/*\"]\n",
+		"/mud/dgdtools.yml":        "root: lib\ndriver_config: mud.dgd\nconventions: {create: setup}\ndialect:\n  kfuns: [\"int *rusage()\", \"int strlen(string s)\"]\nprofile_build:\n  name: m\n  share: [\"std/**\"]\n  checkouts: [\"usr/*\"]\n",
 		"/mud/mud.dgd":             "auto_object = \"/sys/auto\";\ncreate = \"_F_create\";\n",
 		"/mud/lib/sys/auto.c":      "void _F_create() { }\n",
 		"/mud/lib/std/thing.c":     "void setup() { }\n",
@@ -356,10 +357,10 @@ func TestProfileCarriesTheCreateFunction(t *testing.T) {
 	}
 	full, err := config.Discover(m, []string{"/mud/lib"}, config.DiscoverOptions{})
 	require.NoError(t, err)
-	assert.Equal(t, "setup", full.Config.Create, "the configuration's word wins over the driver's")
+	assert.Equal(t, "setup", full.Config.Create())
 	p, err := profilebuild.Build(context.Background(), full, m)
 	require.NoError(t, err)
-	assert.Equal(t, "setup", p.Create)
+	assert.Equal(t, "setup", p.Conventions.Create)
 	data, err := p.Marshal()
 	require.NoError(t, err)
 
@@ -389,4 +390,28 @@ func TestProfileCarriesTheCreateFunction(t *testing.T) {
 	want := []string{"sword.c:2 lifecycle-chain setup() overrides inherited /std/thing::setup() but does not chain it; call ::setup()"}
 	assert.Equal(t, want, findings(t, full, m, "/mud/lib/usr/ann"))
 	assert.Equal(t, want, findings(t, part, alone))
+}
+
+// share_min_owners: files used by that many owners are shared; 0 shares
+// only what share: lists (and what every file needs).
+func TestShareMinOwners(t *testing.T) {
+	build := func(owners string) []string {
+		t.Helper()
+		m := wholeLib()
+		m["/mud/dgdtools.yml"] = "root: lib\ndriver_config: etc/mud.dgd\nprofile_build:\n  name: mini\n  checkouts: [\"players/*\", \"d/*\"]\n" + owners
+		prj, err := config.Discover(m, []string{"/mud/lib"}, config.DiscoverOptions{})
+		require.NoError(t, err)
+		p, err := profilebuild.Build(context.Background(), prj, m)
+		require.NoError(t, err)
+		var files []string
+		for f := range p.Files {
+			files = append(files, f)
+		}
+		sort.Strings(files)
+		return files
+	}
+	needed := []string{"/std/include/paths.h", "/std/include/std.h", "/sys/auto.c", "/sys/forced.h"}
+	assert.Equal(t, needed, build("  share_min_owners: 0\n"), "only what every file needs")
+	assert.Equal(t, needed, build(""), "the default, 5: nothing here has as many owners")
+	assert.Contains(t, build("  share_min_owners: 1\n"), "/std/base.c", "what an owner uses")
 }

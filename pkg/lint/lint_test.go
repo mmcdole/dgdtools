@@ -225,19 +225,6 @@ func TestRuleSelection(t *testing.T) {
 	prj.Config.Lint.Rules = map[string]config.RuleSettings{"syntax": {Severity: "loud"}}
 	_, err = lint.New(prj, vfs.OS{})
 	assert.ErrorContains(t, err, "unknown severity")
-	prj.Config.Lint.Rules = nil
-	prj.Config.Lint.FailOn = "fatal"
-	_, err = lint.New(prj, vfs.OS{})
-	assert.ErrorContains(t, err, "lint.fail_on")
-	prj.Config.Lint.FailOn = ""
-
-	l, err = lint.New(prj, vfs.OS{})
-	require.NoError(t, err)
-	assert.Equal(t, diag.Error, l.FailOn())
-	prj.Config.Lint.FailOn = "warning"
-	l, err = lint.New(prj, vfs.OS{})
-	require.NoError(t, err)
-	assert.Equal(t, diag.Warning, l.FailOn())
 }
 
 // A rule's mapping takes the options of that rule and no others, and a
@@ -252,8 +239,8 @@ func TestRuleOptionsAreChecked(t *testing.T) {
 		_, err = lint.New(prj, m)
 		return err
 	}
-	require.NoError(t, load("    lifecycle-chain: {severity: error, names: [create, reset], max_per_file: 3}\n"))
-	require.NoError(t, load("    raw-inherit-path: {deny: [/std/]}\n    R006: {names: [create]}\n    syntax: {severity: warning, max_per_file: 5}\n"))
+	require.NoError(t, load("    lifecycle-chain: {severity: error, names: [create, reset]}\n"))
+	require.NoError(t, load("    raw-inherit-path: {deny: [/std/]}\n    R006: {names: [create]}\n    syntax: {severity: warning}\n"))
 
 	for rules, want := range map[string]string{
 		"    lifecycle-chain: {nmaes: [create]}\n": `line 3: lint.rules: rule lifecycle-chain has no option "nmaes" (its options: names)`,
@@ -268,8 +255,7 @@ func TestRuleOptionsAreChecked(t *testing.T) {
 		"    no-such-rule: off\n":                  `line 3: lint.rules: unknown rule "no-such-rule"`,
 		"    syntax-error: loud\n":                 `line 3: lint.rules: syntax-error: unknown severity "loud" (want off, info, warning or error)`,
 		"    syntax-error: {severity: [a]}\n":      "severity: want off, info, warning or error",
-		"    syntax-error: {max_per_file: many}\n": "line 3: max_per_file: want a number",
-		"    syntax-error: {max_per_file: -1}\n":   "max_per_file: -1 is not a number of findings",
+		"    syntax-error: {max_per_file: 5}\n":    "line 3: lint.rules.syntax-error.max_per_file removed: pass --max-per-file to dgdtools lint",
 		"    syntax-error: [error]\n":              "line 3: a rule is set to a severity (off, info, warning, error) or to a mapping",
 	} {
 		assert.ErrorContains(t, load(rules), want, rules)
@@ -294,19 +280,17 @@ func TestRuleOptionsAreChecked(t *testing.T) {
 	assert.ErrorContains(t, err, `/q/sub/dgdtools.yml: line 3: lint.rules: rule raw-inherit-path has no option "names" (its options: deny)`)
 }
 
-// Options set in several layers add up key by key; max_per_file may be
-// said for a group.
+// Options set in several layers add up key by key.
 func TestRuleSettingsLayer(t *testing.T) {
 	src := "inherit \"/std/base\";\ninherit \"/obj/x\";\nvoid a() { x == 1; y == 2; z == 3; }\n"
 	prj, m := memProject(map[string]string{"obj/t.c": src, "obj/x.c": "", "d/t.c": src})
 	prj.Config.Lint.Rules = map[string]config.RuleSettings{
 		"raw-inherit-path": {Severity: "warning", Options: map[string]any{"deny": []string{"/std/"}}},
-		"suspicious":       {MaxPerFile: 2},
 	}
 	prj.Config.Lint.Overrides = []config.Override{
 		{Paths: []string{"d/**"}, Rules: map[string]config.RuleSettings{
 			"raw-inherit-path":    {Severity: "info"},
-			"no-effect-statement": {MaxPerFile: 1},
+			"no-effect-statement": {Severity: "error"},
 		}},
 		{Paths: []string{"d/**"}, Rules: map[string]config.RuleSettings{"C001": {Options: map[string]any{"deny": []string{"/obj/"}}}}},
 	}
@@ -317,8 +301,11 @@ func TestRuleSettingsLayer(t *testing.T) {
 	}
 	assert.Equal(t, []string{
 		"d/t.c:2 info raw-inherit-path", // the override's severity, the later override's prefix
-		"d/t.c:3 warning no-effect-statement",
+		"d/t.c:3 error no-effect-statement",
+		"d/t.c:3 error no-effect-statement",
+		"d/t.c:3 error no-effect-statement",
 		"obj/t.c:1 warning raw-inherit-path",
+		"obj/t.c:3 warning no-effect-statement",
 		"obj/t.c:3 warning no-effect-statement",
 		"obj/t.c:3 warning no-effect-statement",
 	}, got)
@@ -1024,11 +1011,11 @@ func TestConventionsComeFromTheConfiguration(t *testing.T) {
 
 	prj, m = memProject(files)
 	prj.Config.Conventions.AutosaveMarkers = []string{"set_auto_save"}
-	prj.Config.Conventions.SpecifierMacros = []string{"visible"}
-	prj.Config.Create = "setup"
+	prj.Config.Conventions.Macros = map[string]string{"visible": "specifier"}
+	prj.Config.Conventions.Create = "setup"
 	assert.Equal(t, []string{"static-autosave-var save.c:1"}, find(prj, m, "save.c"))
 	assert.Empty(t, find(prj, m, "spec.c"))
-	assert.Equal(t, []string{"lifecycle-chain child.c:3"}, find(prj, m, "child.c"), "the driver's create function")
+	assert.Equal(t, []string{"lifecycle-chain child.c:3"}, find(prj, m, "child.c"), "conventions.create")
 
 	prj.Config.Lint.Rules = map[string]config.RuleSettings{"lifecycle-chain": {Options: map[string]any{"names": []string{"create", "setup"}}}}
 	assert.Equal(t, []string{"lifecycle-chain child.c:2", "lifecycle-chain child.c:3"}, find(prj, m, "child.c"), "the rule's own list wins")

@@ -14,7 +14,8 @@ import (
 // nobody can tell, a variable save_object writes, a header's macro.
 func renameLib() map[string]string {
 	return map[string]string{
-		"lib/dgdtools.yml":               "root: .\ninclude_dirs: [/include]\nprofile_build: {checkouts: [\"players/*\", \"d/*\"]}\n",
+		"lib/dgdtools.yml":               "root: .\ndriver_config: mud.dgd\nprofile_build: {checkouts: [\"players/*\", \"d/*\"]}\n",
+		"lib/mud.dgd":                    "include_dirs = ({ \"/include\" });\n",
 		"lib/include/std.h":              "#define LIVING \"/std/living\"\n",
 		"lib/std/living.c":               "#include <std.h>\nint hp;\nstring query_name() { return \"x\"; }\n",
 		"lib/obj/monster.c":              "#include <std.h>\ninherit LIVING;\nstring query_name() { return \"m\"; }\n",
@@ -237,7 +238,7 @@ func TestRenameMove(t *testing.T) {
 // and NEW is then one too; a directory moves with its files.
 func TestRenameMoveOnDisk(t *testing.T) {
 	files := renameLib()
-	files["dgdtools.yml"] = "root: lib\ninclude_dirs: [/include]\n"
+	files["dgdtools.yml"] = "root: lib\ndriver_config: lib/mud.dgd\n"
 	delete(files, "lib/dgdtools.yml")
 	dir := tree(t, files)
 	t.Chdir(dir)

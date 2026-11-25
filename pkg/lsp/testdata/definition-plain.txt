@@ -3,7 +3,9 @@ UTF-8: the same places, without the range of what was asked about.
 
 -- lib/dgdtools.yml --
 root: .
-include_dirs: [/include]
+driver_config: mud.dgd
+-- lib/mud.dgd --
+include_dirs = ({ "/include" });
 -- lib/include/std.h --
 /* Grundläggande */ #define BASE "/std/base"
 -- lib/std/base.c --

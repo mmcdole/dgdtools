@@ -135,7 +135,8 @@ func TestRulesAndExplain(t *testing.T) {
 
 func TestConfigCommand(t *testing.T) {
 	dir := tree(t, map[string]string{
-		"dgdtools.yml":                 "root: lib\ndialect: {typechecking: 1}\ninclude_dirs: [/include]\nformat: {line_endings: lf}\nlint:\n  rules: {missing-visibility: warning}\n",
+		"dgdtools.yml":                 "root: lib\ndriver_config: mud.dgd\ndialect: {typechecking: 1}\nformat: {line_endings: lf}\nlint:\n  rules: {missing-visibility: warning}\n",
+		"mud.dgd":                      "include_dirs = ({ \"/include\" });\n",
 		"lib/a.c":                      "",
 		"lib/.editorconfig":            "[*.c]\nindent_style = tab\n",
 		"lib/players/ann/dgdtools.yml": "root: false\nformat: {indent_width: 2}\nlint:\n  rules: {missing-visibility: off, unreachable-code: error}\n",
@@ -215,18 +216,21 @@ func TestConfigVerifies(t *testing.T) {
 		assert.Contains(t, errs, want, content)
 		write(t, "/", map[string]string{file: was})
 	}
-	bad(cfg, "root: lib\nincldue_dirs: [/x]\n", `line 2: unknown key "incldue_dirs" (did you mean "include_dirs"?)`)
+	bad(cfg, "root: lib\ndriver_confg: mud.dgd\n", `line 2: unknown key "driver_confg" (did you mean "driver_config"?)`)
+	bad(cfg, "root: lib\ninclude_dirs: [/x]\n", cfg+": line 2: include_dirs removed: dgdtools reads it from driver_config")
+	bad(cfg, "root: lib\nprofile_build:\n  driver_config: mud.dgd\n", cfg+": line 3: profile_build.driver_config moved: use top-level driver_config")
+	bad(cfg, "root: lib\nconventions:\n  specifier_macros: [public]\n", "conventions.specifier_macros removed: use conventions.macros: { public: specifier }")
 	bad(cfg, "root: lib\nrelative_object_paths: here\n", cfg+": relative_object_paths: unknown value \"here\"")
 	bad(cfg, "root: lib\nconventions:\n  macros: {X: thing}\n", "conventions.macros: X: unknown class \"thing\"")
 	bad(cfg, "root: lib\nconventions:\n  call_registry: {f: 0}\n", "line 3: a call registry entry is {function: N}")
 	bad(cfg, "root: lib\nlint:\n  rules: {no-such: off}\n", "line 3: lint.rules: unknown rule \"no-such\"")
 	bad(cfg, "root: lib\nlint:\n  rules:\n    syntax-error: {deny: [x]}\n", "rule syntax-error has no option \"deny\"")
 	bad(cfg, "root: lib\nlint:\n  rules: {E001: off, syntax-error: error}\n", "rule syntax-error is set twice")
-	bad(cfg, "root: lib\nlint: {fail_on: never}\n", "lint.fail_on: unknown severity \"never\"")
+	bad(cfg, "root: lib\nlint: {fail_on: never}\n", "lint.fail_on removed: pass --fail-on to dgdtools lint")
 	bad(cfg, "root: lib\nformat: {indent_width: wide}\n", "line 2: format.indent_width: wide is not a whole number")
 	bad(cfg, "root: lib\nprofile: nowhere\n", "profile \"nowhere\" not found")
 	bad(nested, "root: false\nlint:\n  rules: {lifecycle-chain: {nams: [create]}}\n", nested+": line 3: lint.rules: rule lifecycle-chain has no option \"nams\"")
-	bad(nested, "root: false\ninclude_dirs: [/x]\n", nested+": include_dirs belongs in the project's root config")
+	bad(nested, "root: false\nexclude: [x]\n", nested+": exclude belongs in the project's root config")
 
 	// Valid again; a file's own configuration is what is checked for a file.
 	code, _, errs = dgdtools(t, "", "config", filepath.Join(dir, "lib/a.c"))

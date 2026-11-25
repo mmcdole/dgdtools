@@ -21,7 +21,7 @@ func scoped() vfs.Mem {
 		"/mud/lib/players/bob/.dgdtools.yml": "root: false\nformat: {indent_style: tab}\n" +
 			"lint:\n  rules: {missing-visibility: error}\n  overrides:\n    - paths: [\"old/**\"]\n      rules: {all: off}\n",
 		"/mud/lib/players/bob/old/b.c":      "",
-		"/mud/lib/players/cyd/dgdtools.yml": "profile: mymud\nlib_path: /players/cyd\nformat: {line_endings: crlf}\nlint:\n  fail_on: warning\n",
+		"/mud/lib/players/cyd/dgdtools.yml": "profile: mymud\nlib_path: /players/cyd\nformat: {line_endings: crlf}\nlint:\n  baseline: b.json\n",
 		"/mud/lib/players/cyd/c.c":          "",
 	}
 }
@@ -129,25 +129,22 @@ func TestScopeValidation(t *testing.T) {
 		"root path":      {"root: false\nexclude: [\"old/**\"]\n", "exclude belongs in the project's root config"},
 		"profile":        {"root: false\nprofile: mymud\n", "profile belongs in the project's root config"},
 		"dialect":        {"root: false\ndialect: {closures: true}\n", "dialect belongs"},
-		"driver fact":    {"root: false\ninclude_dirs: [/inc]\n", "include_dirs belongs"},
+		"driver config":  {"root: false\ndriver_config: mud.dgd\n", "driver_config belongs"},
 		"conventions":    {"root: false\nconventions: {defines: [X]}\n", "conventions belongs"},
 		"build":          {"root: false\nprofile_build: {name: x}\n", "profile_build belongs"},
-		"fail_on":        {"root: false\nlint: {fail_on: warning}\n", "lint.fail_on belongs"},
 		"baseline":       {"root: false\nlint: {baseline: b.json}\n", "lint.baseline belongs"},
-		"extended":       {"root: false\nextends: base.yml\n", "lib_path belongs"},
 		"root true":      {"root: true\n", "root: true is not a setting"},
 		"width":          {"format: {indent_width: 40}\n", "format.indent_width: indent width 40 is not between 1 and 16"},
 		"style":          {"format:\n  indent_style: tabs\n", "line 2: unknown indent style \"tabs\""},
 		"endings":        {"format: {line_endings: dos}\n", "unknown line endings \"dos\""},
 		"format key":     {"format: {line_width: 80}\n", "line_width"},
-		"fail_on value":  {"lint: {fail_on: fatal}\n", `lint.fail_on: unknown severity "fatal" (want info, warning or error)`},
 		"object paths":   {"relative_object_paths: cwd\n", `relative_object_paths: unknown value "cwd" (want root or file)`},
 		"macro class":    {"conventions:\n  macros: {FOREACH: statment}\n", `conventions.macros: FOREACH: unknown class "statment" (want expression, empty, specifier, type, string, statement, opaque)`},
 		"typechecking":   {"dialect: {typechecking: 3}\n", "dialect.typechecking: 3 is not a typechecking level"},
 		"kfun":           {"dialect:\n  kfuns: [\"int *rusage()\", \"rusage\"]\n", `dialect.kfuns: kfun prototype "rusage": want TYPE NAME(PARAMETERS)`},
 		"scope kfuns":    {"root: false\ndialect: {kfuns: [\"int f()\"]}\n", "dialect belongs"},
-		"registry index": {"conventions:\n  format_registry: {scan: -1}\n", "conventions.format_registry: scan: -1 is not an argument index"},
-		"owners":         {"profile_build: {share_min_owners: -2}\n", "profile_build.share_min_owners"},
+		"registry index": {"conventions:\n  object_registry: {load: -1}\n", "conventions.object_registry: load: -1 is not an argument index"},
+		"owners":         {"profile_build: {share_min_owners: -1}\n", "profile_build.share_min_owners"},
 		"severity":       {"lint:\n  rules:\n    syntax: loud\n", `line 3: lint.rules: syntax: unknown severity "loud"`},
 		"scope severity": {"root: false\nlint:\n  overrides:\n    - paths: [\"a/**\"]\n      rules: {all: none}\n", `lint.overrides[0].rules: all: unknown severity "none"`},
 		"override paths": {"lint:\n  overrides:\n    - rules: {all: off}\n", "lint.overrides[0]: no paths"},
@@ -160,17 +157,16 @@ func TestScopeValidation(t *testing.T) {
 		"bad glob":       {"exclude: [\"[bad\"]\n", `exclude: "[bad": "[" is not part of a glob here`},
 		"override glob":  {"lint:\n  overrides:\n    - paths: [\"{a,b}/**\"]\n      rules: {all: off}\n", "lint.overrides[0].paths:"},
 	} {
-		m := vfs.Mem{"/p/sub/dgdtools.yml": c.yml, "/p/sub/base.yml": "lib_path: /players/x\n", "/p/sub/a.c": ""}
+		m := vfs.Mem{"/p/sub/dgdtools.yml": c.yml, "/p/sub/a.c": ""}
 		_, err := Load(m, "/p/sub/dgdtools.yml")
 		assert.ErrorContains(t, err, c.want, name)
 		assert.ErrorContains(t, err, "/p/sub/dgdtools.yml", name)
 	}
 
-	// What a scope may hold, with a base it shares with others.
+	// What a scope may hold.
 	m := vfs.Mem{
 		"/p/dgdtools.yml":        "root: .\nformat: {indent_width: 8}\n",
-		"/p/sub/dgdtools.yml":    "root: false\nextends: ../style.yml\nlint:\n  rules: {syntax: error}\n",
-		"/p/style.yml":           "format: {indent_style: tab}\nlint:\n  overrides:\n    - paths: [\"x/**\"]\n      rules: {all: off}\n",
+		"/p/sub/dgdtools.yml":    "root: false\nformat: {indent_style: tab}\nlint:\n  rules: {syntax: error}\n  overrides:\n    - paths: [\"x/**\"]\n      rules: {all: off}\n",
 		"/p/sub/a.c":             "",
 		"/p/bad/dgdtools.yml":    "root: false\nlib_path: /x\n",
 		"/p/bad/deep/b.c":        "",
@@ -209,7 +205,7 @@ func TestNestedProject(t *testing.T) {
 		"/p/dgdtools.yml":               "root: .\nformat: {indent_width: 8}\n",
 		"/p/a.c":                        "",
 		"/p/sub/dgdtools.yml":           "root: false\nformat: {indent_width: 2}\n",
-		"/p/sub/own/dgdtools.yml":       "root: .\nformat: {indent_style: tab}\nconventions: {specifier_macros: [public]}\n",
+		"/p/sub/own/dgdtools.yml":       "root: .\nformat: {indent_style: tab}\nconventions: {macros: {public: specifier}}\n",
 		"/p/sub/own/deep/b.c":           "",
 		"/p/sub/own/deep/.dgdtools.yml": "root: false\nformat: {indent_width: 3}\n",
 	}
@@ -233,7 +229,7 @@ func TestNestedProject(t *testing.T) {
 		prj, err := inner()
 		require.NoError(t, err)
 		assert.Equal(t, "/p/sub/own/dgdtools.yml", prj.ConfigPath)
-		assert.Equal(t, []string{"public"}, prj.Config.Conventions.SpecifierMacros)
+		assert.Equal(t, map[string]string{"public": "specifier"}, prj.Config.Conventions.Macros)
 		s, err := prj.Settings("/p/sub/own/deep/b.c")
 		require.NoError(t, err)
 		assert.Equal(t, Format{IndentTab, 3, LineEndingsPreserve}, s.Format, "its own scopes, and none of the outer project's")
@@ -248,9 +244,8 @@ func TestNestedProject(t *testing.T) {
 // from it.
 func TestWorkspaceInvalidate(t *testing.T) {
 	m := vfs.Mem{
-		"/ws/lib/dgdtools.yml":   "extends: base.yml\nprofile: /ws/x.profile\nformat:\n  indent_width: 2\n",
-		"/ws/lib/base.yml":       "lint:\n  rules: {syntax: error}\n",
-		"/ws/x.profile":          "dgdtools-profile 1\n{\"name\":\"x\",\"dialect\":{\"driver\":\"dgd\"},\"conventions\":{}}\n",
+		"/ws/lib/dgdtools.yml":   "profile: /ws/x.profile\nformat:\n  indent_width: 2\n",
+		"/ws/x.profile":          "dgdtools-profile 2\n{\"name\":\"x\",\"dialect\":{\"driver\":\"dgd\"},\"conventions\":{}}\n",
 		"/ws/lib/a.c":            "",
 		"/ws/lib/sub/b.c":        "",
 		"/ws/other/dgdtools.yml": "root: .\n",
@@ -271,7 +266,7 @@ func TestWorkspaceInvalidate(t *testing.T) {
 		return s.Format.IndentWidth
 	}
 	lib, other := project("/ws/lib/sub/b.c"), project("/ws/other/c.c")
-	assert.Equal(t, []string{"/ws/lib/base.yml", "/ws/lib/dgdtools.yml", "/ws/x.profile"}, lib.Inputs())
+	assert.Equal(t, []string{"/ws/lib/dgdtools.yml", "/ws/x.profile"}, lib.Inputs())
 	require.Equal(t, 2, width("/ws/lib/sub/b.c"))
 
 	// A source file is nothing to it.
@@ -280,14 +275,14 @@ func TestWorkspaceInvalidate(t *testing.T) {
 	assert.False(t, changed)
 	assert.Same(t, lib, project("/ws/lib/a.c"))
 
-	// The root config; a file it extends; the profile.
-	m["/ws/lib/dgdtools.yml"] = "extends: base.yml\nprofile: /ws/x.profile\nformat:\n  indent_width: 8\n"
+	// The root config; the profile.
+	m["/ws/lib/dgdtools.yml"] = "profile: /ws/x.profile\nformat:\n  indent_width: 8\n"
 	dropped, changed = w.Invalidate("/ws/lib/dgdtools.yml")
 	assert.Equal(t, []*Project{lib}, dropped)
 	assert.True(t, changed)
 	assert.Equal(t, 8, width("/ws/lib/sub/b.c"))
 	assert.Same(t, other, project("/ws/other/c.c"), "another project is left alone")
-	for _, input := range []string{"/ws/lib/base.yml", "/ws/x.profile"} {
+	for _, input := range []string{"/ws/x.profile"} {
 		lib = project("/ws/lib/a.c")
 		dropped, _ = w.Invalidate(input)
 		assert.Equal(t, []*Project{lib}, dropped, input)
@@ -463,7 +458,7 @@ func TestEditorConfig(t *testing.T) {
 
 func TestUserConfigIsAFallback(t *testing.T) {
 	m := vfs.Mem{
-		"/home/u/.config/dgdtools/dgdtools.yml": "format: {indent_width: 2}\nconventions: {specifier_macros: [visible]}\nlint:\n  rules: {missing-visibility: warning}\n",
+		"/home/u/.config/dgdtools/dgdtools.yml": "format: {indent_width: 2}\nconventions: {macros: {visible: specifier}}\nlint:\n  rules: {missing-visibility: warning}\n",
 		"/work/mine/a.c":                        "",
 		"/work/mine/sub/dgdtools.yml":           "root: false\nformat: {indent_style: tab}\n",
 		"/work/mine/sub/b.c":                    "",
@@ -483,7 +478,7 @@ func TestUserConfigIsAFallback(t *testing.T) {
 	assert.Equal(t, user, prj.ConfigPath)
 	assert.Empty(t, prj.Root)
 	assert.Equal(t, "/work/mine", prj.Base)
-	assert.Equal(t, []string{"visible"}, prj.Config.Conventions.SpecifierMacros)
+	assert.Equal(t, map[string]string{"visible": "specifier"}, prj.Config.Conventions.Macros)
 	s, err := prj.Settings("/work/mine/a.c")
 	require.NoError(t, err)
 	assert.Equal(t, 2, s.Format.IndentWidth)
@@ -497,7 +492,7 @@ func TestUserConfigIsAFallback(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, prj.UserConfig)
 	assert.Equal(t, "/proj/dgdtools.yml", prj.ConfigPath)
-	assert.Empty(t, prj.Config.Conventions.SpecifierMacros)
+	assert.Empty(t, prj.Config.Conventions.Macros)
 	s, err = prj.Settings("/proj/c.c")
 	require.NoError(t, err)
 	assert.Equal(t, Format{IndentSpace, 4, LineEndingsLF}, s.Format)
@@ -562,9 +557,9 @@ func TestWorkspace(t *testing.T) {
 func TestContributedValuesAreValidated(t *testing.T) {
 	m := vfs.Mem{
 		"/p/dgdtools.yml": "profile: bad.profile\n",
-		"/p/bad.profile":  "dgdtools-profile 1\n{\"name\":\"bad\",\"dialect\":{\"driver\":\"dgd\"},\"relative_object_paths\":\"sideways\",\"conventions\":{}}\n",
+		"/p/bad.profile":  "dgdtools-profile 2\n{\"name\":\"bad\",\"dialect\":{\"driver\":\"dgd\"},\"relative_object_paths\":\"sideways\",\"conventions\":{}}\n",
 		"/p/a.c":          "",
-		"/q/dgdtools.yml": "root: .\nprofile_build: {driver_config: mud.dgd}\n",
+		"/q/dgdtools.yml": "root: .\ndriver_config: mud.dgd\n",
 		"/q/mud.dgd":      "typechecking = 7;\n",
 		"/q/a.c":          "",
 	}

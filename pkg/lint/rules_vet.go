@@ -132,18 +132,13 @@ var ruleSscanfFormat = &Rule{
 	Doc: "more variables supplied than %-conversions in the scan format",
 	Explain: "Fewer variables than conversions is the legal idiom for discarding " +
 		"trailing matches; more variables than conversions means some are never " +
-		"assigned. sscanf is built in; add mudlib scanf-style functions with " +
-		"conventions.format_registry.",
+		"assigned. The function checked is sscanf.",
 	Default: true, Severity: diag.Warning,
 	Run: func(p *Pass) {
-		registry := map[string]int{"sscanf": 1}
-		for name, idx := range p.Config.Conventions.FormatRegistry {
-			registry[name] = idx
-		}
+		const fmtIdx = 1 // sscanf(str, format, ...)
 		for _, dc := range p.calls().Direct {
 			c := dc.Call
-			fmtIdx, ok := registry[c.Fun.Name]
-			if !ok || c.Scoped || c.Spread || fmtIdx >= len(c.Args) {
+			if c.Fun.Name != "sscanf" || c.Scoped || c.Spread || fmtIdx >= len(c.Args) {
 				continue
 			}
 			lit, ok := c.Args[fmtIdx].(*syntax.BasicLit)
@@ -291,8 +286,8 @@ var ruleMissingVisibility = &Rule{
 	Code: "C002", Name: "missing-visibility", Group: GroupConvention,
 	Doc: "function with no visibility specifier",
 	Explain: "Flags functions declared without private, static, nomask or one " +
-		"of the mudlib's specifier macros (conventions.specifier_macros, or an empty " +
-		"macro the file's headers define).",
+		"of the mudlib's specifier macros (a macro the file's headers define as " +
+		"empty or as specifiers, or one conventions.macros classes as specifier).",
 	Default: false, Severity: diag.Warning,
 	Run: func(p *Pass) {
 		p.Tree.Funcs(func(fn *syntax.FuncDecl) bool {

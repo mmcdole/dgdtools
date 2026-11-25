@@ -7,10 +7,12 @@ calls.
 
 -- lib/dgdtools.yml --
 root: .
-include_dirs: [/include]
-auto_objects: [/sys/auto]
+driver_config: mud.dgd
 dialect:
   kfuns: ["int *rusage()"]
+-- lib/mud.dgd --
+include_dirs = ({ "/include" });
+auto_object = "/sys/auto";
 -- lib/include/std.h --
 /* Grundläggande */ #define BASE "/std/base"
 // The square of x.

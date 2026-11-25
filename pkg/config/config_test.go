@@ -23,11 +23,11 @@ modules = ([ "/x/ext.so" : "" ]);
 
 func TestDiscoverWalksUpFromThePath(t *testing.T) {
 	m := vfs.Mem{
-		"/mud/dgdtools.yml":         "root: lib\nprofile_build:\n  driver_config: etc/mud.dgd\n",
+		"/mud/dgdtools.yml":         "root: lib\ndriver_config: etc/mud.dgd\n",
 		"/mud/etc/mud.dgd":          driverCfg,
 		"/mud/lib/d/Foo/castle.c":   "",
-		"/other/.dgdtools.yml":      "root: .\ninclude_dirs: [/inc]\n",
-		"/noroot/dgdtools.yml":      "include_dirs: [/inc]\n",
+		"/other/.dgdtools.yml":      "root: .\nexclude: [\"old/**\"]\n",
+		"/noroot/dgdtools.yml":      "exclude: [\"old/**\"]\n",
 		"/noroot/lib/w.c":           "",
 		"/other/src/x.c":            "",
 		"/nowhere/deep/down/y.c":    "",
@@ -44,7 +44,9 @@ func TestDiscoverWalksUpFromThePath(t *testing.T) {
 	assert.Equal(t, []string{"/dgd/include", "/std/include"}, prj.Config.IncludeDirs)
 	assert.Equal(t, "/dgd/include/Std.h", prj.Config.IncludeFile)
 	assert.Equal(t, []string{"/dgd/lib/object"}, prj.Config.AutoObjects)
-	assert.Equal(t, "_F_create", prj.Config.Create)
+	// The driver's create (_F_create) is what the auto object receives,
+	// not what the lib's objects define: that is conventions.create.
+	assert.Equal(t, "create", prj.Config.Create())
 	require.NotNil(t, prj.Config.Dialect.Typechecking)
 	assert.Equal(t, 1, *prj.Config.Dialect.Typechecking)
 
@@ -93,42 +95,40 @@ func TestDiscoverWalksUpFromThePath(t *testing.T) {
 	assert.ErrorContains(t, err, "not a directory")
 }
 
-func TestExplicitKeysBeatDriverConfig(t *testing.T) {
+// The driver settings come from the driver config alone; what the file
+// says of the dialect and the conventions is its own.
+func TestDriverConfigIsTheSource(t *testing.T) {
 	m := vfs.Mem{
-		"/mud/dgdtools.yml": "root: .\nprofile_build:\n  driver_config: mud.dgd\ninclude_dirs: [/mine]\ncreate: init\ndialect: {typechecking: 2}\n",
+		"/mud/dgdtools.yml": "root: .\ndriver_config: mud.dgd\nconventions: {create: init}\ndialect: {typechecking: 2}\n",
 		"/mud/mud.dgd":      driverCfg,
 		"/mud/a.c":          "",
 	}
 	prj, err := Discover(m, []string{"/mud/a.c"}, DiscoverOptions{})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"/mine"}, prj.Config.IncludeDirs)
+	assert.Equal(t, []string{"/dgd/include", "/std/include"}, prj.Config.IncludeDirs)
 	assert.Equal(t, 2, *prj.Config.Dialect.Typechecking)
-	assert.Equal(t, "init", prj.Config.Create)
+	assert.Equal(t, "init", prj.Config.Create())
 	assert.Equal(t, "/dgd/include/Std.h", prj.Config.IncludeFile)
+	assert.Equal(t, []string{"/mud/dgdtools.yml", "/mud/mud.dgd"}, prj.Inputs())
+
+	// A driver config that cannot be read is an error that names the key.
+	m["/mud/dgdtools.yml"] = "root: .\ndriver_config: nope.dgd\n"
+	_, err = Discover(m, []string{"/mud/a.c"}, DiscoverOptions{})
+	assert.ErrorContains(t, err, "driver_config: ")
 }
 
-func TestExtendsAndRuleSettings(t *testing.T) {
+func TestRuleSettings(t *testing.T) {
 	m := vfs.Mem{
-		"/shared/base.yml": `root: lib
-exclude: ["attic/**"]
+		"/proj/dgdtools.yml": `root: lib
+exclude: ["**/old/**"]
 conventions:
-  specifier_macros: [public]
-  call_registry: {add_action: {function: 0}}
+  call_registry: {add_action: {function: 0}, store_fp: [{object: 0, function: 1}, {function: 0}]}
+  macros: { FOREACH: statement, public: specifier }
+  defines: [__FEATURE__]
 lint:
   rules:
     syntax: error
     raw-inherit-path: { severity: warning, deny: ["/std/"] }
-    lifecycle-chain: off
-`,
-		"/shared/lib/x.c": "",
-		"/proj/dgdtools.yml": `extends: ../shared/base.yml
-exclude: ["**/old/**"]
-conventions:
-  call_registry: {store_fp: [{object: 0, function: 1}, {function: 0}]}
-  macros: { FOREACH: statement }
-  defines: [__FEATURE__]
-lint:
-  rules:
     lifecycle-chain: { names: [create, reset] }
     E001: info
   overrides:
@@ -138,10 +138,7 @@ lint:
 	}
 	c, err := Load(m, "/proj/dgdtools.yml")
 	require.NoError(t, err)
-	// root from the base is relative to the base file.
-	assert.Equal(t, "/shared/lib", c.AbsRoot())
-	// Lists replace, maps merge.
-	assert.Equal(t, []string{"**/old/**"}, c.Exclude)
+	assert.Equal(t, "/proj/lib", c.AbsRoot())
 	zero := 0
 	assert.Equal(t, map[string]profile.CallForms{
 		"add_action": {{Function: 0}},
@@ -152,50 +149,90 @@ lint:
 	assert.Equal(t, "info", c.Lint.Rules["E001"].Severity)
 	assert.Equal(t, map[string]any{"deny": []any{"/std/"}}, c.Lint.Rules["raw-inherit-path"].Options)
 	assert.Equal(t, map[string]any{"names": []any{"create", "reset"}}, c.Lint.Rules["lifecycle-chain"].Options)
-	assert.Equal(t, 9, c.Lint.Rules["lifecycle-chain"].Line, "the line in the file that says it")
+	assert.Equal(t, 11, c.Lint.Rules["lifecycle-chain"].Line, "the line in the file that says it")
 	require.Len(t, c.Lint.Overrides, 1)
 	assert.Equal(t, "off", c.Lint.Overrides[0].Rules["runtime"].Severity)
 	assert.Equal(t, "statement", c.Conventions.Macros["FOREACH"])
+	assert.Equal(t, "create", c.Create())
 
 	// A misspelled key is an error, not a silently ignored setting.
-	m["/typo/dgdtools.yml"] = "include_dir: [/x]\n"
+	m["/typo/dgdtools.yml"] = "driver_conifg: x.dgd\n"
 	_, err = Load(m, "/typo/dgdtools.yml")
-	assert.ErrorContains(t, err, "include_dir")
+	assert.ErrorContains(t, err, `unknown key "driver_conifg" (did you mean "driver_config"?)`)
 	// So is a project key in the lint section, where it does not belong.
-	m["/typo/dgdtools.yml"] = "lint:\n  include_dirs: [/x]\n"
+	m["/typo/dgdtools.yml"] = "lint:\n  exclude: [x]\n"
 	_, err = Load(m, "/typo/dgdtools.yml")
-	assert.ErrorContains(t, err, "include_dirs")
+	assert.ErrorContains(t, err, `unknown key "exclude"`)
+}
 
-	// Cycles are reported.
-	m["/loop/a.yml"] = "extends: b.yml\n"
-	m["/loop/b.yml"] = "extends: a.yml\n"
-	_, err = Load(m, "/loop/a.yml")
-	assert.ErrorContains(t, err, "cycle")
+// A key that an older dgdtools had says what took its place, naming the
+// file and the line.
+func TestRemovedKeys(t *testing.T) {
+	for text, want := range map[string]string{
+		"extends: base.yml\n":                                    "line 1: extends removed: put per-directory settings in a nested dgdtools.yml with root: false",
+		"root: .\ninclude_dirs: [/include]\n":                    "line 2: include_dirs removed: dgdtools reads it from driver_config",
+		"include_file: /i.h\n":                                   "include_file removed: dgdtools reads it from driver_config",
+		"auto_objects: [/sys/auto]\n":                            "auto_objects removed: dgdtools reads auto_object from driver_config",
+		"driver_object: /sys/driver\n":                           "driver_object removed: dgdtools reads it from driver_config",
+		"create: setup\n":                                        "create moved: use conventions.create",
+		"profile_build:\n  name: x\n  driver_config: mud.dgd\n":  "line 3: profile_build.driver_config moved: use top-level driver_config",
+		"conventions:\n  specifier_macros: [public]\n":           "conventions.specifier_macros removed: use conventions.macros: { public: specifier }",
+		"conventions:\n  specifier_macros: [public, visible]\n":  "use conventions.macros: { public: specifier, visible: specifier }",
+		"conventions:\n  format_registry: {scan: 1}\n":           "conventions.format_registry removed: sscanf is the scanf-style function dgdtools checks",
+		"lint:\n  fail_on: warning\n":                            "lint.fail_on removed: pass --fail-on to dgdtools lint",
+		"lint:\n  rules:\n    syntax-error: {max_per_file: 5}\n": "line 3: lint.rules.syntax-error.max_per_file removed: pass --max-per-file to dgdtools lint",
+		"lint:\n  overrides:\n    - paths: [a]\n      rules: {E: {severity: info, max_per_file: 1}}\n": "lint.overrides[0].rules.E.max_per_file removed",
+	} {
+		_, err := Load(vfs.Mem{"/p/dgdtools.yml": text}, "/p/dgdtools.yml")
+		require.Error(t, err, text)
+		assert.Contains(t, err.Error(), "/p/dgdtools.yml: ", text)
+		assert.Contains(t, err.Error(), want, text)
+	}
+	// In a settings scope too.
+	m := vfs.Mem{"/p/dgdtools.yml": "root: .\n", "/p/w/dgdtools.yml": "root: false\nlint: {fail_on: info}\n", "/p/w/a.c": ""}
+	prj, err := Discover(m, []string{"/p/w/a.c"}, DiscoverOptions{})
+	require.NoError(t, err)
+	_, err = prj.Settings("/p/w/a.c")
+	assert.ErrorContains(t, err, "/p/w/dgdtools.yml: line 2: lint.fail_on removed")
+}
+
+func TestShareMinOwners(t *testing.T) {
+	load := func(text string) (*Config, error) {
+		return Load(vfs.Mem{"/p/dgdtools.yml": text}, "/p/dgdtools.yml")
+	}
+	c, err := load("profile_build: {name: x}\n")
+	require.NoError(t, err)
+	assert.Equal(t, DefaultShareMinOwners, c.ProfileBuild.MinOwners())
+	c, err = load("profile_build: {share_min_owners: 0}\n")
+	require.NoError(t, err)
+	assert.Equal(t, 0, c.ProfileBuild.MinOwners(), "0: only what share: lists")
+	c, err = load("profile_build: {share_min_owners: 3}\n")
+	require.NoError(t, err)
+	assert.Equal(t, 3, c.ProfileBuild.MinOwners())
+	_, err = load("profile_build: {share_min_owners: -1}\n")
+	assert.ErrorContains(t, err, "share_min_owners: -1: want a number of owners, or 0 to share only what share: lists")
 }
 
 // The documented examples must stay loadable and name only real settings.
 func TestExampleConfigsLoad(t *testing.T) {
 	c, err := Load(vfs.OS{}, "../../dgdtools.example.yml")
 	require.NoError(t, err)
-	assert.Equal(t, "mud.dgd", c.ProfileBuild.DriverConfig)
-	assert.Equal(t, "root", c.RelativeObjectPaths)
-	assert.Empty(t, c.Conventions.SpecifierMacros)
-	assert.Equal(t, Format{IndentSpace, 4, LineEndingsPreserve}, c.Format)
+	assert.Equal(t, "etc/mud.dgd", c.DriverConfig)
 	assert.Equal(t, "warning", c.Lint.Rules["raw-inherit-path"].Severity)
 	require.Len(t, c.Lint.Overrides, 1)
-	assert.Equal(t, "off", c.Lint.Overrides[0].Rules["lifecycle-chain"].Severity)
+	assert.Equal(t, "off", c.Lint.Overrides[0].Rules["runtime"].Severity)
 
 	c, err = Load(vfs.OS{}, "../../examples/viking/dgdtools.yml")
 	require.NoError(t, err)
-	assert.Equal(t, "etc/config.viking", c.ProfileBuild.DriverConfig)
+	assert.Equal(t, "etc/config.viking", c.DriverConfig)
 	assert.Contains(t, c.ProfileBuild.Share, "std/**")
-	assert.Equal(t, []string{"public"}, c.Conventions.SpecifierMacros)
+	assert.Equal(t, map[string]string{"public": "specifier"}, c.Conventions.Macros)
 	zero := 0
 	assert.Equal(t, map[string]profile.CallForms{
 		"add_action": {{Function: 0}},
 		"store_fp":   {{Object: &zero, Function: 1}, {Function: 0}},
 	}, c.Conventions.CallRegistry)
-	assert.Equal(t, "create", c.Create)
+	assert.Equal(t, "create", c.Create())
 	assert.Equal(t, map[string]any{"deny": []any{"/std/", "/obj/"}}, c.Lint.Rules["raw-inherit-path"].Options)
 	assert.Contains(t, c.Exclude, "attic/**")
 	// The kfuns of the driver's extension module, beside the driver's.

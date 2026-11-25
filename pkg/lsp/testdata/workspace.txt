@@ -4,9 +4,9 @@ has for a folder without one.
 
 -- lib/dgdtools.yml --
 root: .
-include_dirs: [/include]
-profile_build:
-  driver_config: ../mud.dgd
+driver_config: ../mud.dgd
+-- lib/mud.dgd --
+include_dirs = ({ "/include" });
 -- mud.dgd --
 include_dirs = ({ "/include" });
 -- lib/include/paths.h --
@@ -39,12 +39,13 @@ diagnostics lib/obj/a.c
 write lib/obj/chest.c "void open() {}\n"
 watched created lib/obj/chest.c
 diagnostics lib/obj/a.c
-# The configuration changes: a rule is turned off.
-write lib/dgdtools.yml "root: .\ninclude_dirs: [/include]\nlint:\n  rules:\n    target-object-missing: off\n"
+# The configuration changes: a rule is turned off, and the driver's
+# configuration is the one in the lib.
+write lib/dgdtools.yml "root: .\ndriver_config: mud.dgd\nlint:\n  rules:\n    target-object-missing: off\n"
 watched changed lib/dgdtools.yml
 diagnostics lib/obj/a.c
-# The project no longer reads the driver's configuration: the watchers
-# are registered again without it.
+# The one beside the lib is no longer read, and the one in the lib is not
+# under the patterns: the watchers are registered again for it.
 received client/unregisterCapability
 received client/registerCapability
 
@@ -243,13 +244,14 @@ exit
 <     }
 <   ]
 < }
-# The configuration changes: a rule is turned off.
-> write lib/dgdtools.yml "root: .\ninclude_dirs: [/include]\nlint:\n  rules:\n    target-object-missing: off\n"
+# The configuration changes: a rule is turned off, and the driver's
+# configuration is the one in the lib.
+> write lib/dgdtools.yml "root: .\ndriver_config: mud.dgd\nlint:\n  rules:\n    target-object-missing: off\n"
 > watched changed lib/dgdtools.yml
 > diagnostics lib/obj/a.c
 < {"uri": "file://$ROOT/lib/obj/a.c", "version": 1, "diagnostics": []}
-# The project no longer reads the driver's configuration: the watchers
-# are registered again without it.
+# The one beside the lib is no longer read, and the one in the lib is not
+# under the patterns: the watchers are registered again for it.
 > received client/unregisterCapability
 < {"unregisterations": [{"id": "dgdtools-watch-1", "method": "workspace/didChangeWatchedFiles"}]}
 < {"unregisterations": [{"id": "dgdtools-watch-2", "method": "workspace/didChangeWatchedFiles"}]}
@@ -266,7 +268,8 @@ exit
 <           {"globPattern": "**/.dgdtools.yml"},
 <           {"globPattern": "**/.editorconfig"},
 <           {"globPattern": "**/*.profile"},
-<           {"globPattern": "**/dgdtools-baseline.json"}
+<           {"globPattern": "**/dgdtools-baseline.json"},
+<           {"globPattern": {"baseUri": "file://$ROOT/lib", "pattern": "mud.dgd"}}
 <         ]
 <       }
 <     }

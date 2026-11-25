@@ -1,11 +1,12 @@
-# The dgdtools.yml of VikingMUD, a DGD mudlib: a real configuration, with
-# everything that is particular to one lib where it belongs. It sits next
-# to the lib (lib/) and the driver's configuration (etc/config.viking).
+# The dgdtools.yml of VikingMUD, a DGD mudlib. It sits next to the lib
+# (lib/) and the driver's config (etc/config.viking), and says only what
+# differs from the defaults.
 #
 # A wizard with only their own directory has a dgdtools.yml there that
-# says `profile: viking`, and the profile built from this file.
+# says `profile: viking`, using the profile built from this file.
 
 root: lib
+driver_config: etc/config.viking
 
 exclude:
   - "attic/**"               # retired code kept for reference
@@ -17,8 +18,6 @@ exclude:
   - "**/var/**"              # generated runtime data (maps, save state)
 
 dialect:
-  slash_slash: true
-  closures: false
   # The driver loads an extension module (viking-dgd-extension), which
   # adds these to the kfuns of stock DGD.
   kfuns:
@@ -26,13 +25,9 @@ dialect:
     - "string argon2_hash(string password, int ops_limit, int mem_limit)"
     - "int argon2_verify(string password, string hash)"
 
-# The driver's create function is __create, which the auto object
-# receives and passes on: what an object of this lib defines is create().
-create: create
-
 conventions:
   # /dgd/include/Std.h has `#define public`.
-  specifier_macros: [public]
+  macros: { public: specifier }
 
   call_registry:
     add_action: { function: 0 }          # add_action("fn", "verb")
@@ -46,22 +41,11 @@ conventions:
 
 profile_build:
   name: viking
-  # include_dirs, include_file, auto_object and typechecking.
-  driver_config: etc/config.viking
   share: ["std/**", "obj/**", "room/**", "secure/**", "dgd/**"]
   checkouts: ["players/*", "d/*"]
 
-format:
-  indent_style: space
-  indent_width: 4
-  line_endings: preserve
-
 lint:
   rules:
-    # Not on; when asked for, about the parts of the lib that have path
-    # macros.
+    # Off by default; when turned on, it covers the parts of the lib
+    # that have path macros.
     raw-inherit-path: { deny: ["/std/", "/obj/"] }
-  overrides:
-    - paths: ["legacy/**"]
-      rules: { lifecycle-chain: off }
-  fail_on: error

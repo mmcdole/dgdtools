@@ -71,16 +71,14 @@ func (w *world) hover(path, at string) string {
 }
 
 const hoverConfig = `root: .
-include_dirs: [/include]
-include_file: /include/auto.h
-auto_objects: [/sys/auto]
+driver_config: ../mud.dgd
 dialect:
   kfuns:
     - "int *rusage()"
     - "string argon2_hash(string password, int ops_limit, int mem_limit)"
 conventions:
   defines: [SITE]
-  specifier_macros: [public]
+  macros: { public: specifier }
   call_registry:
     add_action: { function: 0 }
 `
@@ -88,6 +86,7 @@ conventions:
 func hoverLib() vfs.Mem {
 	return vfs.Mem{
 		"/lib/dgdtools.yml":   hoverConfig,
+		"/mud.dgd":            driverConfig,
 		"/lib/include/auto.h": "/* Set for everybody. */\n#define AUTO 1\n",
 		"/lib/include/std.h": "#define STD \"/std/base\"\n\n// The square\n// of x.\n#define SQUARE(x) ((x)*(x))\n" +
 			"#define ME this_object()\n#define status int\n#define LOG(s) { write(s); \\\n  write(\"\\n\"); }\n#define LONG " + strings.Repeat("1 + ", 150) + "1\n",
@@ -211,7 +210,7 @@ func TestHover(t *testing.T) {
 	assert.Equal(t, "variable weight `private static int weight` @ /std/base.c:2 // The weight, in grams.",
 		w.hover("/lib/std/base.c", "int wei|ght;"))
 	// A macro the configuration says what to take for, and no file defines.
-	assert.Equal(t, "macro public `#define public` (empty) @ the project's configuration (conventions)",
+	assert.Equal(t, "macro public `#define public` (specifier) @ the project's configuration (conventions)",
 		w.hover("/lib/obj/b.c", "pub|lic void"))
 	// In the auto object itself a kfun's name is the kfun.
 	assert.Equal(t, "function find_object `object find_object(string)` @ kfun, DGD 1.7.9 // find the loaded object for a given object name",

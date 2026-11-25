@@ -92,8 +92,7 @@ func (w *world) rename(path, at, name string) string {
 }
 
 const cfg = `root: .
-include_dirs: [/include]
-auto_objects: [/sys/auto]
+driver_config: mud.dgd
 conventions:
   call_registry:
     add_action: { function: 0 }
@@ -103,6 +102,7 @@ conventions:
 func lib() vfs.Mem {
 	return vfs.Mem{
 		"/lib/dgdtools.yml":   cfg,
+		"/lib/mud.dgd":        "include_dirs = ({ \"/include\" });\nauto_object = \"/sys/auto\";\n",
 		"/lib/include/std.h":  "#define ME this_object()\n#define STR(x) #x\n#define USES_SECRET (secret + 1)\n#define NAMES_FRESH fresh\n",
 		"/lib/include/flag.h": "#ifdef MINE\n#endif\n",
 		"/lib/sys/auto.c":     "static void write(string s) {}\nvoid autof() {}\nstatic void set_auto_save() {}\n",

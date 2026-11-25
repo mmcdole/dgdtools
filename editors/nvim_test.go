@@ -241,7 +241,8 @@ vim.cmd('qall!')
 // file, with characters of several bytes before the names on both sides.
 func TestNeovimDefinition(t *testing.T) {
 	files := map[string]string{
-		"lib/dgdtools.yml":  "root: .\ninclude_dirs: [/include]\n",
+		"lib/dgdtools.yml":  "root: .\ndriver_config: mud.dgd\n",
+		"lib/mud.dgd":       "include_dirs = ({ \"/include\" });\n",
 		"lib/include/std.h": "/* blåbær \U0001F600 */ #define BASE \"/std/base\"\n",
 		"lib/std/base.c":    "int weight;\n/* grøt */ void create() {}\n",
 		"lib/obj/a.c": "#include <std.h>\ninherit BASE;\nvoid later();\n" +
@@ -349,7 +350,8 @@ vim.cmd('qall!')
 // arguments of calls, with characters of several bytes before the names.
 func TestNeovimHover(t *testing.T) {
 	files := map[string]string{
-		"lib/dgdtools.yml":  "root: .\ninclude_dirs: [/include]\n",
+		"lib/dgdtools.yml":  "root: .\ndriver_config: mud.dgd\n",
+		"lib/mud.dgd":       "include_dirs = ({ \"/include\" });\n",
 		"lib/include/std.h": "/* blåbær \U0001F600 */ #define BASE \"/std/base\"\n",
 		"lib/std/base.c":    "int weight;\n/* Sets the weight,\n   in grams. */\nvarargs void set_weight(int grams, string why...) {}\nvoid create() {}\n",
 		"lib/obj/a.c": "#include <std.h>\ninherit BASE;\n" +
@@ -466,7 +468,8 @@ vim.cmd('qall!')
 // characters of several bytes before the names.
 func TestNeovimSymbols(t *testing.T) {
 	files := map[string]string{
-		"lib/dgdtools.yml":  "root: .\ninclude_dirs: [/include]\n",
+		"lib/dgdtools.yml":  "root: .\ndriver_config: mud.dgd\n",
+		"lib/mud.dgd":       "include_dirs = ({ \"/include\" });\n",
 		"lib/include/std.h": "/* blåbær \U0001F600 */ #define BASE \"/std/base\"\n",
 		"lib/std/base.c":    "/* grøt */ int weight;\nvarargs void set_weight(int grams, string why...) {}\nvoid create() {}\n",
 		"lib/obj/a.c": "#include <std.h>\n#define TWICE(x) ((x) + (x))\ninherit BASE;\nprivate int count;\n" +
@@ -559,7 +562,8 @@ vim.cmd('qall!')
 // on a receiver nobody knows.
 func TestNeovimCompletion(t *testing.T) {
 	files := map[string]string{
-		"lib/dgdtools.yml":  "root: .\ninclude_dirs: [/include]\n",
+		"lib/dgdtools.yml":  "root: .\ndriver_config: mud.dgd\n",
+		"lib/mud.dgd":       "include_dirs = ({ \"/include\" });\n",
 		"lib/include/std.h": "/* blåbær \U0001F600 */ #define BASE \"/std/base\"\n",
 		"lib/std/base.c":    "int weight;\nvarargs void set_weight(int grams, string why...) {}\nvoid create() {}\n",
 		"lib/obj/a.c": "#include <std.h>\ninherit BASE;\nvoid later_on(int when) {}\n" +
@@ -675,7 +679,8 @@ vim.cmd('qall!')
 // the names.
 func TestNeovimReferences(t *testing.T) {
 	files := map[string]string{
-		"lib/dgdtools.yml":  "root: .\ninclude_dirs: [/include]\n",
+		"lib/dgdtools.yml":  "root: .\ndriver_config: mud.dgd\n",
+		"lib/mud.dgd":       "include_dirs = ({ \"/include\" });\n",
 		"lib/include/std.h": "#define BASE \"/std/base\"\n",
 		"lib/std/base.c":    "/* grøt */ void set_weight(int grams) {}\n",
 		"lib/obj/b.c":       "#include <std.h>\ninherit BASE;\nvoid reset() { set_weight(2); }\n",
@@ -765,7 +770,8 @@ vim.cmd('qall!')
 // itself (0.11 and later), in full and then as a delta after an edit.
 func TestNeovimTokens(t *testing.T) {
 	files := map[string]string{
-		"lib/dgdtools.yml":  "root: .\ninclude_dirs: [/include]\n",
+		"lib/dgdtools.yml":  "root: .\ndriver_config: mud.dgd\n",
+		"lib/mud.dgd":       "include_dirs = ({ \"/include\" });\n",
 		"lib/include/std.h": "#define BASE \"/std/base\"\n",
 		"lib/std/base.c":    "/* grøt */ void set_weight(int grams) {}\n",
 		"lib/obj/a.c": "#include <std.h>\ninherit BASE;\n" +
@@ -860,7 +866,8 @@ vim.cmd('qall!')
 // function is not renamed.
 func TestNeovimRename(t *testing.T) {
 	files := map[string]string{
-		"lib/dgdtools.yml": "root: .\ninclude_dirs: [/include]\n",
+		"lib/dgdtools.yml": "root: .\ndriver_config: mud.dgd\n",
+		"lib/mud.dgd":      "include_dirs = ({ \"/include\" });\n",
 		"lib/obj/a.c": "private void helper(int n) {}\n" +
 			"void create() {\n    int count;\n    /* først \U0001F600 */ helper(1); count = 1; count++;\n    helper(count);\n}\n" +
 			"void greet() {}\n",

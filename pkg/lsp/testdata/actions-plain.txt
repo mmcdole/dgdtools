@@ -3,10 +3,12 @@ tags, links and related locations, and edits by URI with no version.
 
 -- lib/dgdtools.yml --
 root: .
-include_dirs: [/include]
+driver_config: mud.dgd
 lint:
   rules:
     unused-suppression: warning
+-- lib/mud.dgd --
+include_dirs = ({ "/include" });
 -- lib/std/base.c --
 int foo(int a) { return a; }
 -- lib/obj/a.c --

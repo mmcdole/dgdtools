@@ -39,7 +39,7 @@ func (w *world) symbols(path string) []string {
 
 func TestSymbols(t *testing.T) {
 	fs := wholeLib()
-	fs["/lib/dgdtools.yml"] += "  specifier_macros: [public]\n"
+	fs["/lib/dgdtools.yml"] += "  macros: { public: specifier }\n"
 	fs["/lib/obj/s.c"] = `#include <std.h>
 # define LIMIT 3
 #define TWICE(a, b) \

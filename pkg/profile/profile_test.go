@@ -35,19 +35,19 @@ func sample() *profile.Profile {
 		Language: "lpc", Driver: "dgd", Version: "1.7", SlashSlash: true,
 		Typechecking: &tc, Predefined: []string{"__DGD__"},
 	}
-	p.IncludeDirs, p.IncludeFile, p.AutoObjects, p.Create = []string{"/include"}, "/include/std.h", []string{"/sys/auto"}, "_F_create"
+	p.IncludeDirs, p.IncludeFile, p.AutoObjects = []string{"/include"}, "/include/std.h", []string{"/sys/auto"}
+	p.DriverObject = "/sys/driver"
 	p.RelativeObjectPaths = "file"
 	p.Covered, p.Holes, p.Checkouts = []string{"/include/", "/std/"}, []string{"std/secret/**"}, []string{"usr/*"}
 	p.Conventions = profile.Conventions{
-		SpecifierMacros: []string{"public"},
-		Macros:          map[string]string{"FOREACH": "statement"},
-		Defines:         []string{"__FEATURE__"},
+		Create:  "setup",
+		Macros:  map[string]string{"FOREACH": "statement", "public": "specifier"},
+		Defines: []string{"__FEATURE__"},
 		CallRegistry: map[string]profile.CallForms{
 			"add_action": {{Function: 0}},
 			"bind":       {{Object: &zero, Function: 1, Args: &two}, {Function: 0}},
 		},
 		ObjectRegistry:  map[string]int{"load": 0},
-		FormatRegistry:  map[string]int{"scan": 1},
 		AutosaveMarkers: []string{"set_save"},
 		VirtualPaths:    []string{"virtual/**"},
 	}
@@ -94,18 +94,22 @@ func TestMarshal(t *testing.T) {
 
 func TestParseErrors(t *testing.T) {
 	for src, want := range map[string]string{
-		"":                             "not a dgdtools profile",
-		"some-other-file 1\n{}\n":      "not a dgdtools profile",
-		"dgdtools-profile 99\n{}\n":    "profile format 99 is not supported by this dgdtools (wants 1); rebuild the profile",
-		"dgdtools-profile 1\nnonsense": "profile manifest:",
-		"dgdtools-profile 1\n{\"name\":\"x\",\"dialect\":{\"driver\":\"fluffos\"}}\n":                            `profile "x" is for driver "fluffos"; only the dgd dialect is implemented`,
-		"dgdtools-profile 1\n{\"dialect\":{\"driver\":\"dgd\"},\"conventions\":{\"call_registry\":{\"f\":0}}}\n": "profile manifest:",
+		"":                          "not a dgdtools profile",
+		"some-other-file 1\n{}\n":   "not a dgdtools profile",
+		"dgdtools-profile 99\n{}\n": "profile format 99 is from a newer dgdtools (this one reads format 2): update dgdtools",
+		// A profile of dgdtools 0.3 or older has conventions this one
+		// does not read (specifier_macros, format_registry, a top-level
+		// create): it is refused, not half understood.
+		"dgdtools-profile 1\n{\"name\":\"old\",\"dialect\":{\"driver\":\"dgd\"},\"conventions\":{\"specifier_macros\":[\"public\"]}}\n": "profile format 1 is from an older dgdtools (this one reads format 2): rebuild the profile with dgdtools profile build",
+		"dgdtools-profile 2\nnonsense": "profile manifest:",
+		"dgdtools-profile 2\n{\"name\":\"x\",\"dialect\":{\"driver\":\"fluffos\"}}\n":                            `profile "x" is for driver "fluffos"; only the dgd dialect is implemented`,
+		"dgdtools-profile 2\n{\"dialect\":{\"driver\":\"dgd\"},\"conventions\":{\"call_registry\":{\"f\":0}}}\n": "profile manifest:",
 		"\x1f\x8bnot gzip": "gzip",
 	} {
 		_, err := profile.Parse([]byte(src))
 		assert.ErrorContains(t, err, want, "%q", src)
 	}
-	p, err := profile.Parse([]byte("dgdtools-profile 1\n{\"name\":\"bare\",\"dialect\":{\"driver\":\"dgd\"}}\n"))
+	p, err := profile.Parse([]byte("dgdtools-profile 2\n{\"name\":\"bare\",\"dialect\":{\"driver\":\"dgd\"}}\n"))
 	require.NoError(t, err)
 	assert.Equal(t, "bare", p.Name)
 	assert.Empty(t, p.Files)
@@ -153,7 +157,7 @@ func TestResolveAndLoad(t *testing.T) {
 	assert.Equal(t, "/proj/mylib.profile", p.Path)
 	assert.Equal(t, "mylib", p.Name)
 	_, err = profile.Load(m, "sub/other.profile", "/proj", nil)
-	assert.ErrorContains(t, err, "/proj/sub/other.profile: profile format 7 is not supported")
+	assert.ErrorContains(t, err, "/proj/sub/other.profile: profile format 7 is from a newer dgdtools")
 }
 
 // A stub is not a file on disk and is not named like one.

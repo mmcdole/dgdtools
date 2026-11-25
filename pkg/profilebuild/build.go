@@ -49,10 +49,7 @@ func Build(ctx context.Context, prj *config.Project, fsys vfs.FS) (*profile.Prof
 	pb := cfg.ProfileBuild
 	share := pb.Share
 	shared := fileset.NewMatcher(share)
-	minOwners := pb.ShareMinOwners
-	if minOwners == 0 {
-		minOwners = config.DefaultShareMinOwners
-	}
+	minOwners := pb.MinOwners()
 	omit := fileset.NewMatcher(pb.Omit)
 	incDirs := map[string]bool{}
 	for _, d := range cfg.IncludeDirs {
@@ -81,7 +78,7 @@ func Build(ctx context.Context, prj *config.Project, fsys vfs.FS) (*profile.Prof
 		Typechecking: cfg.Dialect.Typechecking, Predefined: pp.Predefined,
 		Kfuns: cfg.Dialect.Kfuns,
 	}
-	p.IncludeDirs, p.IncludeFile, p.AutoObjects, p.Create = cfg.IncludeDirs, cfg.IncludeFile, cfg.AutoObjects, cfg.Create
+	p.IncludeDirs, p.IncludeFile, p.AutoObjects = cfg.IncludeDirs, cfg.IncludeFile, cfg.AutoObjects
 	p.DriverObject = cfg.DriverObject
 	p.RelativeObjectPaths = cfg.RelativeObjectPaths
 	p.Checkouts = pb.Checkouts

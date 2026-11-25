@@ -9,8 +9,8 @@ The rules of `dgdtools lint`, by group. `dgdtools rules` lists them and
 ```yaml
 lint:
   rules:
-    unreachable-code: warning          # off | info | warning | error
-    syntax-error: { max_per_file: 5 }  # with settings; severity is optional
+    unreachable-code: warning                    # off | info | warning | error
+    lifecycle-chain: { names: [create, reset] }  # with options; severity is optional
 ```
 
 "Needs the lib" says the rule reads other files than the one it reports
@@ -90,7 +90,7 @@ DGD requires every inherit to precede all declarations ("inherit must precede al
 
 Untyped parameter in a typeless function, under driver typechecking.
 
-With typechecking >= 1 in the driver config, a function written without a return type is still type-checked, and a parameter without a type is the compile error "missing type for parameter". Silent when the typechecking level is unknown (set dialect.typechecking or profile_build.driver_config).
+With typechecking >= 1 in the driver config, a function written without a return type is still type-checked, and a parameter without a type is the compile error "missing type for parameter". Silent when the typechecking level is unknown (set driver_config or dialect.typechecking).
 
 ### return-value
 
@@ -150,7 +150,7 @@ Under non-strict typechecking DGD silently pads missing call_other arguments wit
 
 Lifecycle function (the create function) does not call the inherited implementations.
 
-A create function that overrides an inherited one without calling it (::create()) leaves the parent uninitialized. With several defining parents, label each inherit and chain each one. Proof-based: files with no explicit inherit, parents without the function, and unresolved parents are skipped. The function is the project's create function: the project key create, which is read from the driver config's create parameter and set by a mudlib whose auto object receives the driver's call and passes it on under another name; "create" when nothing says. The option names lists other functions to hold to the same rule.
+A create function that overrides an inherited one without calling it (::create()) leaves the parent uninitialized. With several defining parents, label each inherit and chain each one. Proof-based: files with no explicit inherit, parents without the function, and unresolved parents are skipped. The function is the project's create function, conventions.create ("create" when it is not set; a mudlib whose auto object receives the driver's call and passes it on under another name sets the name its objects define). The option names lists other functions to hold to the same rule.
 
 Options:
 
@@ -190,7 +190,7 @@ A statement whose top-level operator is a comparison computes a value and discar
 
 More variables supplied than %-conversions in the scan format.
 
-Fewer variables than conversions is the legal idiom for discarding trailing matches; more variables than conversions means some are never assigned. sscanf is built in; add mudlib scanf-style functions with conventions.format_registry.
+Fewer variables than conversions is the legal idiom for discarding trailing matches; more variables than conversions means some are never assigned. The function checked is sscanf.
 
 ### unreachable-code
 
@@ -230,7 +230,7 @@ Options:
 
 Function with no visibility specifier.
 
-Flags functions declared without private, static, nomask or one of the mudlib's specifier macros (conventions.specifier_macros, or an empty macro the file's headers define).
+Flags functions declared without private, static, nomask or one of the mudlib's specifier macros (a macro the file's headers define as empty or as specifiers, or one conventions.macros classes as specifier).
 
 ### unformatted
 

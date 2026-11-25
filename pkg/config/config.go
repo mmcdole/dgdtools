@@ -44,14 +44,8 @@ const (
 )
 
 type Config struct {
-	// Extends names config files to start from, resolved relative to
-	// this file. Later entries win; this file wins over all of them.
-	// Scalars and lists replace, maps merge.
-	Extends StringList `yaml:"extends"`
-
-	// Project keys: what the project is. They are the facts a profile's
-	// manifest carries, under the same names; what is set here wins over
-	// the profile. A settings scope has none of them.
+	// Project keys: what the project is. A settings scope has none of
+	// them.
 
 	// Root is the filesystem directory that is the lib's "/" (default:
 	// the config file's directory). Relative paths are resolved against
@@ -70,23 +64,14 @@ type Config struct {
 	LibPath string `yaml:"lib_path"`
 	// Exclude are globs (lib-relative) of files directory walks skip.
 	Exclude []string `yaml:"exclude"`
+	// DriverConfig is the DGD driver's config file, relative to the
+	// config file's directory: the one source of the driver settings
+	// (include_dirs, include_file, auto_object, driver_object,
+	// typechecking), for a whole-lib lint and for a profile build. A
+	// partial checkout gets them from its profile instead.
+	DriverConfig string `yaml:"driver_config"`
 
 	Dialect DialectCfg `yaml:"dialect"`
-	// IncludeDirs are lib-absolute search paths for #include <...> and
-	// "..." resolution (the driver config's include_dirs).
-	IncludeDirs []string `yaml:"include_dirs"`
-	// IncludeFile is force-included into every compile by the driver.
-	IncludeFile string `yaml:"include_file"`
-	// AutoObjects are lib paths implicitly inherited by every object.
-	AutoObjects []string `yaml:"auto_objects"`
-	// Create is the function a new object is initialized by: the one the
-	// driver calls (the driver config's create), or, in a lib whose auto
-	// object receives that call and passes it on under another name, the
-	// one the lib's objects define.
-	Create string `yaml:"create"`
-	// DriverObject is the lib path of the driver object (the driver
-	// config's driver_object), whose functions the driver calls by name.
-	DriverObject string `yaml:"driver_object"`
 	// RelativeObjectPaths says what an object path without a leading
 	// slash is relative to. The driver leaves that to the lib (its driver
 	// object resolves every inherit and every call_other by path):
@@ -107,6 +92,20 @@ type Config struct {
 	Format Format `yaml:"format"`
 	Lint   Lint   `yaml:"lint"`
 
+	// Driver settings: not keys of the file, but what the driver config
+	// (DriverConfig) or the profile says.
+
+	// IncludeDirs are lib-absolute search paths for #include <...> and
+	// "..." resolution (the driver config's include_dirs).
+	IncludeDirs []string `yaml:"-"`
+	// IncludeFile is force-included into every compile by the driver.
+	IncludeFile string `yaml:"-"`
+	// AutoObjects are lib paths implicitly inherited by every object.
+	AutoObjects []string `yaml:"-"`
+	// DriverObject is the lib path of the driver object (the driver
+	// config's driver_object), whose functions the driver calls by name.
+	DriverObject string `yaml:"-"`
+
 	// Scope is set by `root: false`: the file is a settings scope, not a
 	// project's root config.
 	Scope bool `yaml:"-"`
@@ -114,40 +113,32 @@ type Config struct {
 	// file; both are empty for a project without one.
 	Dir  string `yaml:"-"`
 	Path string `yaml:"-"`
-	// Files are the files the config was read from: Path and, before it,
-	// the files it extends.
-	Files []string `yaml:"-"`
 }
 
-// StringList decodes from either a scalar or a sequence.
-type StringList []string
+// DefaultCreate is the function a new object is initialized by when
+// conventions.create does not say.
+const DefaultCreate = "create"
 
-func (s *StringList) UnmarshalYAML(n *yaml.Node) error {
-	if n.Kind == yaml.ScalarNode {
-		*s = []string{n.Value}
-		return nil
+// Create returns the function the lib's objects are initialized by:
+// conventions.create, or DefaultCreate.
+func (c *Config) Create() string {
+	if c.Conventions.Create != "" {
+		return c.Conventions.Create
 	}
-	var l []string
-	if err := n.Decode(&l); err != nil {
-		return err
-	}
-	*s = l
-	return nil
+	return DefaultCreate
 }
 
 // ProfileBuild describes how to turn a whole lib into a profile.
 type ProfileBuild struct {
 	// Name of the profile (default: the lib root's directory name).
 	Name string `yaml:"name"`
-	// DriverConfig is the DGD driver's config file: include_dirs,
-	// include_file, auto_object, create and typechecking are read from it.
-	DriverConfig string `yaml:"driver_config"`
 	// ShareMinOwners selects shared code by use: a file referenced (by
 	// inherit, #include, or as a call/clone/find target) from at least
 	// this many distinct owners goes into the profile. An owner is one
 	// per-wizard tree (see Checkouts) or one other top-level directory.
-	// Default 5; -1 turns inference off.
-	ShareMinOwners int `yaml:"share_min_owners"`
+	// nil is DefaultShareMinOwners; 0 turns inference off, so that only
+	// what Share lists is shared.
+	ShareMinOwners *int `yaml:"share_min_owners"`
 	// Share are globs (lib-relative) added to what inference finds; a
 	// glob taking a whole directory ("std/**") also marks it complete,
 	// so that a path missing under it is known not to exist. The include
@@ -162,6 +153,15 @@ type ProfileBuild struct {
 
 // DefaultShareMinOwners is the inference threshold when none is set.
 const DefaultShareMinOwners = 5
+
+// MinOwners returns the inference threshold: share_min_owners, or
+// DefaultShareMinOwners when it is not set; 0 is no inference.
+func (pb *ProfileBuild) MinOwners() int {
+	if pb.ShareMinOwners == nil {
+		return DefaultShareMinOwners
+	}
+	return *pb.ShareMinOwners
+}
 
 type DialectCfg struct {
 	SlashSlash *bool `yaml:"slash_slash"` // default true
@@ -184,23 +184,18 @@ type Lint struct {
 	// config, relative to its directory in a settings scope.
 	Overrides []Override `yaml:"overrides"`
 
-	// FailOn and Baseline describe a run, not a file: root config only.
-	FailOn string `yaml:"fail_on"` // info | warning | error
 	// Baseline is the baseline file (default lint.BaselineFileName next
-	// to the config).
+	// to the config). It describes a run, not a file: root config only.
 	Baseline string `yaml:"baseline"`
 }
 
 // RuleSettings is what a configuration says about one rule, or about a
 // group of rules. In YAML it is a severity, or a mapping that may give a
-// severity, max_per_file, and the options of the rule.
+// severity and the options of the rule.
 type RuleSettings struct {
 	// Severity is off, info, warning or error; a severity turns the rule
 	// on. Empty: the entry says nothing about it.
 	Severity string
-	// MaxPerFile reports at most that many findings of a rule in one
-	// file; 0 says nothing about it.
-	MaxPerFile int
 	// Options are the rule's own settings, by key. Which keys a rule has,
 	// and what values they take, is the rule's to say: the linter checks
 	// them (lint.Rule.Options).
@@ -228,10 +223,6 @@ func (r *RuleSettings) UnmarshalYAML(n *yaml.Node) error {
 				return fmt.Errorf("line %d: severity: want off, info, warning or error", val.Line)
 			}
 			r.Severity = val.Value
-		case "max_per_file":
-			if err := val.Decode(&r.MaxPerFile); err != nil || val.Tag != "!!int" {
-				return fmt.Errorf("line %d: max_per_file: want a number", val.Line)
-			}
 		default:
 			var v any
 			if err := val.Decode(&v); err != nil {
@@ -252,10 +243,10 @@ type Override struct {
 	Rules map[string]RuleSettings `yaml:"rules"`
 }
 
-// Load reads and validates a config file, applying extends.
+// Load reads and validates a config file.
 func Load(fs vfs.FS, path string) (*Config, error) {
 	c := &Config{}
-	if err := loadInto(fs, path, c, map[string]bool{}); err != nil {
+	if err := loadInto(fs, path, c); err != nil {
 		return nil, err
 	}
 	c.Dir = filepath.Dir(path)
@@ -266,17 +257,15 @@ func Load(fs vfs.FS, path string) (*Config, error) {
 	return c, nil
 }
 
-// header is what is read of a config file before the rest: what it
-// extends, and whether it is a settings scope.
+// header is what is read of a config file before the rest: whether it
+// is a settings scope.
 type header struct {
-	Extends StringList `yaml:"extends"`
-	Root    yaml.Node  `yaml:"root"`
+	Root yaml.Node `yaml:"root"`
 }
 
 // The kinds of configuration file, by what the file says.
 const (
-	// kindProject: the file has a project key (projectKeys), itself or
-	// in a file it extends. It is a project's root config wherever it is.
+	// kindProject: the file has a project key (projectKey). It is a project's root config wherever it is.
 	kindProject = iota
 	// kindSettings: the file has settings only. Below a project's config
 	// it is a settings scope of that project; with no project above, it
@@ -298,7 +287,7 @@ func kind(fs vfs.FS, path string) (int, error) {
 		return kindScope, nil
 	}
 	c := &Config{}
-	if err := loadInto(fs, path, c, map[string]bool{}); err != nil {
+	if err := loadInto(fs, path, c); err != nil {
 		return 0, err
 	}
 	if c.projectKey(false) != "" {
@@ -336,57 +325,28 @@ func readHeader(fs vfs.FS, path string) (*header, []byte, error) {
 	return h, data, nil
 }
 
-func loadInto(fs vfs.FS, path string, c *Config, seen map[string]bool) error {
-	key := filepath.Clean(path)
-	if seen[key] {
-		return fmt.Errorf("%s: extends cycle", path)
-	}
-	seen[key] = true
+func loadInto(fs vfs.FS, path string, c *Config) error {
 	head, data, err := readHeader(fs, path)
 	if err != nil {
 		return err
 	}
-	for _, base := range head.Extends {
-		if !filepath.IsAbs(base) {
-			base = filepath.Join(filepath.Dir(path), base)
-		}
-		if err := loadInto(fs, base, c, seen); err != nil {
-			return fmt.Errorf("%s: extends: %w", path, err)
-		}
-		// Relative paths in a base are relative to the base. A base
-		// that leaves root out says nothing about it.
-		abs := func(p *string) {
-			if *p != "" && !filepath.IsAbs(*p) {
-				*p = filepath.Join(filepath.Dir(base), *p)
-			}
-		}
-		abs(&c.Root)
-		abs(&c.ProfileBuild.DriverConfig)
-		if strings.ContainsAny(c.Profile, `/\`) || strings.HasSuffix(c.Profile, ".profile") {
-			abs(&c.Profile)
-		}
+	// A key an older dgdtools had says what took its place. Any other
+	// unknown key is an error too: a misspelled setting must not be
+	// silently ignored (ruff, Biome and golangci-lint all reject them).
+	if err := checkRemoved(data); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
 	}
-	root, drv := c.Root, c.ProfileBuild.DriverConfig
-	c.Root, c.ProfileBuild.DriverConfig = "", ""
-	// Unknown keys are errors: a misspelled setting must not be silently
-	// ignored (ruff, Biome and golangci-lint all reject them).
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(c); err != nil && err != io.EOF {
 		return fmt.Errorf("%s: %w", path, yamlError(err))
 	}
-	// What this file says about being a scope is what counts, whatever
-	// the files it extends are.
 	if c.Scope, err = head.scope(); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
-	if c.Scope || c.Root == "" {
-		c.Root = root
+	if c.Scope {
+		c.Root = "" // root: false is no directory
 	}
-	if c.ProfileBuild.DriverConfig == "" {
-		c.ProfileBuild.DriverConfig = drv
-	}
-	c.Files = append(c.Files, key)
 	return nil
 }
 
@@ -447,11 +407,6 @@ func (c *Config) Validate() error {
 			}
 		}
 	}
-	if v := c.Lint.FailOn; v != "" {
-		if _, ok := diag.ParseSeverity(v); !ok {
-			return fmt.Errorf("lint.fail_on: unknown severity %q (want info, warning or error)", v)
-		}
-	}
 	switch c.RelativeObjectPaths {
 	case "", ObjectPathsFromRoot, ObjectPathsFromFile:
 	default:
@@ -463,8 +418,8 @@ func (c *Config) Validate() error {
 	if _, err := c.Kfuns(); err != nil {
 		return fmt.Errorf("dialect.kfuns: %w", err)
 	}
-	if n := c.ProfileBuild.ShareMinOwners; n < -1 {
-		return fmt.Errorf("profile_build.share_min_owners: %d: want a number of owners, or -1 for no inference", n)
+	if n := c.ProfileBuild.ShareMinOwners; n != nil && *n < 0 {
+		return fmt.Errorf("profile_build.share_min_owners: %d: want a number of owners, or 0 to share only what share: lists", *n)
 	}
 	conv := c.Conventions
 	for _, name := range slices.Sorted(maps.Keys(conv.Macros)) {
@@ -475,7 +430,7 @@ func (c *Config) Validate() error {
 	for _, reg := range []struct {
 		key string
 		m   map[string]int
-	}{{"object_registry", conv.ObjectRegistry}, {"format_registry", conv.FormatRegistry}} {
+	}{{"object_registry", conv.ObjectRegistry}} {
 		for _, name := range slices.Sorted(maps.Keys(reg.m)) {
 			if reg.m[name] < 0 {
 				return fmt.Errorf("conventions.%s: %s: %d is not an argument index (0 is the first argument)", reg.key, name, reg.m[name])
@@ -513,9 +468,6 @@ func checkRules(where string, rules map[string]RuleSettings) error {
 		if _, ok := diag.ParseSeverity(rs.Severity); !ok && rs.Severity != "" && rs.Severity != SeverityOff {
 			return fmt.Errorf("%s%s: %s: unknown severity %q (want off, info, warning or error)", line, where, name, rs.Severity)
 		}
-		if rs.MaxPerFile < 0 {
-			return fmt.Errorf("%s%s: %s: max_per_file: %d is not a number of findings", line, where, name, rs.MaxPerFile)
-		}
 	}
 	return nil
 }
@@ -535,8 +487,7 @@ func (c *Config) validateScope() error {
 
 // projectKey returns the name of the first key set that says what the
 // project is, or "" when the file has settings only. With run, the
-// settings only a root config may have (lint.fail_on, lint.baseline)
-// count too.
+// setting only a root config may have (lint.baseline) counts too.
 func (c *Config) projectKey(run bool) string {
 	for _, k := range []struct {
 		name string
@@ -546,16 +497,11 @@ func (c *Config) projectKey(run bool) string {
 		{"profile", c.Profile != ""},
 		{"lib_path", c.LibPath != ""},
 		{"exclude", len(c.Exclude) > 0},
+		{"driver_config", c.DriverConfig != ""},
 		{"dialect", !reflect.DeepEqual(c.Dialect, DialectCfg{})},
-		{"include_dirs", len(c.IncludeDirs) > 0},
-		{"include_file", c.IncludeFile != ""},
-		{"auto_objects", len(c.AutoObjects) > 0},
-		{"create", c.Create != ""},
-		{"driver_object", c.DriverObject != ""},
 		{"relative_object_paths", c.RelativeObjectPaths != ""},
 		{"conventions", !reflect.DeepEqual(c.Conventions, profile.Conventions{})},
 		{"profile_build", !reflect.DeepEqual(c.ProfileBuild, ProfileBuild{})},
-		{"lint.fail_on", run && c.Lint.FailOn != ""},
 		{"lint.baseline", run && c.Lint.Baseline != ""},
 	} {
 		if k.set {
@@ -660,14 +606,9 @@ func (c *Config) Predefined() map[string]bool {
 	return m
 }
 
-// MacroClasses returns the macro classes the configuration gives:
-// conventions.specifier_macros are empty macros, conventions.macros
-// names a class.
+// MacroClasses returns the macro classes conventions.macros gives.
 func (c *Config) MacroClasses() map[string]pp.Class {
 	m := map[string]pp.Class{}
-	for _, s := range c.Conventions.SpecifierMacros {
-		m[s] = pp.ClassEmpty
-	}
 	for name, cls := range c.Conventions.Macros {
 		m[name], _ = pp.ParseClass(cls) // Validate has seen to the spelling
 	}

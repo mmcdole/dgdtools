@@ -43,8 +43,8 @@ func rulesDoc() string {
 	b.WriteString("The rules of `dgdtools lint`, by group. `dgdtools rules` lists them and\n")
 	b.WriteString("`dgdtools explain RULE` prints one. A rule is set in `lint.rules` of\n")
 	b.WriteString("`dgdtools.yml` under its name or its code:\n\n")
-	b.WriteString("```yaml\nlint:\n  rules:\n    unreachable-code: warning          # off | info | warning | error\n")
-	b.WriteString("    syntax-error: { max_per_file: 5 }  # with settings; severity is optional\n```\n\n")
+	b.WriteString("```yaml\nlint:\n  rules:\n    unreachable-code: warning                    # off | info | warning | error\n")
+	b.WriteString("    lifecycle-chain: { names: [create, reset] }  # with options; severity is optional\n```\n\n")
 	b.WriteString("\"Needs the lib\" says the rule reads other files than the one it reports\n")
 	b.WriteString("in: it runs when the lib root, or a profile of the lib, is known.\n")
 	groups := map[string]string{

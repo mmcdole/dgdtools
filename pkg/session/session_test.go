@@ -28,7 +28,8 @@ var bg = context.Background()
 // through a macro, calls by path, callbacks its inheritors provide.
 func lib() vfs.Mem {
 	return vfs.Mem{
-		"/lib/dgdtools.yml":   "root: .\ninclude_dirs: [/include]\ninclude_file: /include/auto.h\nauto_objects: [/sys/auto]\n",
+		"/lib/dgdtools.yml":   "root: .\ndriver_config: mud.dgd\n",
+		"/lib/mud.dgd":        "include_dirs = ({ \"/include\" });\ninclude_file = \"/include/auto.h\";\nauto_object = \"/sys/auto\";\n",
 		"/lib/include/auto.h": "#define AUTO 1\n",
 		"/lib/include/std.h":  "#define STD \"/std/base\"\n",
 		"/lib/sys/auto.c":     "void autof() {}\n",

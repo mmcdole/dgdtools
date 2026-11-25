@@ -1,175 +1,59 @@
-# dgdtools.yml — Configuration reference for dgdtools (lint, format, rename, lsp)
+# dgdtools.yml: configuration for dgdtools (lint, format, rename, lsp).
 #
-# Place this file at your project root. Every key is optional, and dgdtools
-# searches upward from each target path to find the nearest config file.
+# Put it at the top of your mud, next to the lib and the DGD driver config.
+# Every key is optional. See docs/configuration.md for the full reference
+# and examples/viking/dgdtools.yml for a real mudlib.
 #
-# This example shows all keys for a full mudlib checkout. For a partial wizard
-# checkout using a published mudlib profile, a single line is enough:
+# A wizard with only their own directory needs one line instead:
 #
-#     profile: NAME
-#
-# Add `lib_path: /usr/name` if your local directory path doesn't match the
-# mudlib's checkout patterns. Profiles are generated from a full mudlib with
-# `dgdtools profile build`.
-#
-# See examples/viking/dgdtools.yml for a real mudlib configuration.
-#
-# Top-level keys describe the project itself. The `format:` and `lint:`
-# sections at the bottom are settings that can also be overridden in nested
-# per-directory dgdtools.yml files (see the end of this file).
+#     profile: mymud           # mymud.profile, built with `dgdtools profile build`
 
-# extends: ../shared/dgdtools.yml   # Inherit from another config file:
-#                                   # scalars and lists replace; maps merge.
+root: lib                      # the directory that is "/" to the driver
+driver_config: etc/mud.dgd     # DGD driver config: include_dirs, include_file,
+                               # auto_object, driver_object, typechecking
 
-root: lib                    # Directory corresponding to mudlib "/"
-                             # (use `.` for this file's directory). Never
-                             # guessed: without root, profile, or lib_path,
-                             # only file-local rules run.
-
-# profile: NAME              # Mudlib profile: NAME.profile next to this file,
-#                            # in $DGDTOOLS_PROFILE_PATH, or in
-#                            # ~/.config/dgdtools/profiles; or a file path.
-#                            # Local files on disk always override the profile.
-# lib_path: /usr/name        # Mudlib path of this directory for partial checkouts.
-
-exclude:                     # Globs skipped during directory walks. Files
-  - "**/old/**"              # passed explicitly on the CLI are always included.
-  - "**/*.bak"
+exclude:                       # lib-relative globs that directory walks skip
+  - "**/old/**"
 
 dialect:
-  slash_slash: true          # Allow // comments (DGD SLASHSLASH build flag)
-  closures: false            # Allow `function`, &f(), (*f)() (DGD CLOSURES flag)
-  # typechecking: 2          # Driver typechecking level; if unset, rules that
-  #                          # depend on typechecking stay silent.
-  # Extra kfuns provided by driver extension modules (`modules` in the DGD
-  # driver config), written as prototypes (parameter names are optional).
-  # Stock DGD kfuns are built in.
-  # kfuns:
-  #   - "int *rusage()"
-  #   - "string sha256(string text, varargs int rounds)"
+  slash_slash: true            # // comments (DGD's SLASHSLASH, default true)
+  closures: false              # function pointers (DGD's CLOSURES, default false)
+  kfuns:                       # kfuns of the driver's extension modules
+    - "int *rusage()"
 
-# Driver settings. Normally loaded automatically from `profile_build.driver_config`
-# or a profile; setting them here overrides both.
-# include_dirs: ["/include"]
-# include_file: "/include/std.h"       # Force-included in every file
-# auto_objects: ["/kernel/lib/auto"]   # Implicitly inherited by every object
+# relative_object_paths: root  # "std/room" is relative to: root (default) | file
 
-# Initializer function name for new objects. If your auto object receives the
-# driver's create call and forwards it under another name (e.g., _F_create ->
-# create), set the name that mudlib objects actually define here.
-# create: create
+conventions:                   # the mudlib's own habits; nothing by default
+  create: create               # what objects define to be initialized (default create)
+  macros:                      # macro classes, for files read without their header
+    public: specifier          #   #define public
+  defines: []                  # names taken as defined for #ifdef
+  call_registry:               # functions that call a function by name (0-based args)
+    add_action: { function: 0 }
+  object_registry: {}          # functions that take an object path: { load: 0 }
+  autosave_markers: []         # names that mark an object as using save_object
+  virtual_paths: []            # lib globs served by virtual-object daemons
 
-# Base directory for object paths without a leading slash (e.g. "std/room") in
-# inherit statements and call_other:
-#   root   Relative to mudlib "/" (default, matching compile_object)
-#   file   Relative to the directory of the file containing the path (kernel lib)
-relative_object_paths: root
+profile_build:                 # `dgdtools profile build`, and checkout layout
+  name: mymud
+  share: ["kernel/**", "lib/**"]   # shared code always put in the profile
+  share_min_owners: 5          # also share files used by this many owners (0: off)
+  omit: []                     # never put in the profile
+  checkouts: ["usr/*"]         # per-wizard directories
 
-# Mudlib-specific conventions (none enabled by default).
-conventions:
-  # Empty macros used in specifier positions (e.g. `#define public`), for files
-  # analyzed without the header that defines them.
-  specifier_macros: []
-
-  # Manual macro classifications when #define inference isn't enough:
-  # expression | empty | specifier | type | string | statement | opaque
-  macros: {}
-
-  # Macro names treated as defined when evaluating #ifdef branches (driver
-  # built-ins like __DGD__ are already known). Undecidable branches are skipped.
-  defines: []
-
-  # Functions that invoke a callback by name (0-based argument indices):
-  #   function  Argument containing the function name
-  #   object    Argument containing the target object (defaults to this_object())
-  #   args      First argument forwarded to the callback (optional)
-  # Functions with multiple signatures can list forms in priority order.
-  # call_other ({object: 0, function: 1, args: 2}) and
-  # call_out ({function: 0, args: 2}) are built in.
-  call_registry: {}
-  #  subscribe: { function: 1 }                  # subscribe("event", "handler")
-  #  bind:                                       # bind(obj, "fn") or bind("fn")
-  #    - { object: 0, function: 1 }
-  #    - { function: 0 }
-
-  # Functions taking a literal object path and its 0-based argument index.
-  # compile_object, find_object, and clone_object are built in.
-  object_registry: {}
-
-  # scanf-style functions and their format-string argument index.
-  # sscanf (index 1) is built in.
-  format_registry: {}
-
-  # Function or macro names indicating an object persists state via save_object
-  # (used by static-autosave-var and rename safety checks).
-  autosave_markers: []
-
-  # Mudlib path globs served by virtual-object daemons (no backing .c file).
-  virtual_paths: []
-
-# Settings for `dgdtools profile build` (and used directly for full-lib linting).
-profile_build:
-  name: mylib
-  # Path to the DGD driver config file (reads include_dirs, include_file,
-  # auto_object, create, driver_object, and typechecking).
-  driver_config: mud.dgd
-  # Files referenced (inherit, #include, call/clone/find) by at least this many
-  # distinct owners (from checkouts or top-level dirs) are included in the profile
-  # automatically. Set to -1 to include only what `share:` lists.
-  share_min_owners: 5
-  # Additional shared code globs included in the profile (headers and public
-  # signatures only, never function bodies). Directories listed here are also
-  # marked complete so missing paths under them can be flagged.
-  share: ["kernel/**", "lib/**"]
-  # Files to never include in a profile, even if referenced.
-  omit: []
-  # Patterns for per-wizard or domain directories; used to infer lib_path for
-  # partial checkouts and to group rename diffs by owner.
-  checkouts: ["usr/*"]
-
-# ---------------------------------------------------------------- settings
-
-# Formatter settings. Unset keys fall back to .editorconfig (indent_style,
-# indent_size, end_of_line), then to built-in defaults.
-format:
-  indent_style: space        # space | tab
-  indent_width: 4            # Spaces per indent level (1-16)
-  line_endings: preserve     # preserve | lf | crlf
+format:                        # unset keys fall back to .editorconfig
+  indent_style: space          # space | tab
+  indent_width: 4
+  line_endings: preserve       # preserve | lf | crlf
 
 lint:
-  # Keys can be a rule name, code (E001), or group (all, syntax, runtime,
-  # suspicious, convention). Values can be off | info | warning | error, or a
-  # map with severity, max_per_file, and rule-specific options (`dgdtools explain RULE`).
-  # More specific keys win (rule > group > all). Setting a severity enables the rule.
-  rules:
+  rules:                       # rule, code or group: off | info | warning | error
     unreachable-code: warning
-    # Directories that should be inherited via path macros instead of raw strings.
-    raw-inherit-path: { severity: warning, deny: ["/lib/"] }
-    # Functions that must call their inherited implementation (defaults to `create`).
-    # lifecycle-chain: { names: [create, reset] }
-    # syntax-error: { max_per_file: 5 }
-
-  # Path-specific rule overrides (globs relative to the root).
+    raw-inherit-path: { severity: warning, deny: ["/lib/"] }   # with options
   overrides:
     - paths: ["usr/**"]
-      rules: { lifecycle-chain: off }
+      rules: { runtime: off }
+  baseline: dgdtools-baseline.json   # written by `dgdtools lint --write-baseline`
 
-  # Baseline file generated by `dgdtools lint --write-baseline`.
-  baseline: dgdtools-baseline.json
-
-  fail_on: error             # Exit 1 at this severity or above
-
-# ------------------------------------------------------- per-directory settings
-#
-# A nested dgdtools.yml containing only `format:` and `lint:` adjusts settings
-# for files in its subtree. Setting `root: false` makes this explicit and turns
-# any accidental project key into an error:
-#
-#     # usr/name/dgdtools.yml
-#     root: false
-#     format: { indent_style: tab }
-#     lint:
-#       rules: { missing-visibility: warning }
-#       overrides:
-#         - paths: ["attic/**"]          # Relative to this directory
-#           rules: { all: off }
+# A nested dgdtools.yml with `root: false` (or only format: and lint:)
+# adjusts format: and lint: for its directory.

@@ -24,6 +24,7 @@ import (
 func wideLib() vfs.Mem {
 	return vfs.Mem{
 		"/lib/dgdtools.yml":    cfg,
+		"/lib/mud.dgd":         "include_dirs = ({ \"/include\" });\nauto_object = \"/sys/auto\";\n",
 		"/lib/include/std.h":   "#define ME this_object()\n#define LIVING \"/std/living\"\n#define QN query_name()\n",
 		"/lib/include/hp.h":    "#define MAX_HP 100\n",
 		"/lib/sys/auto.c":      "static void write(string s) {}\nvoid autof() {}\n",
@@ -311,7 +312,8 @@ func TestRenameProgramOfFiles(t *testing.T) {
 // driver calls in a connection's object is renamed with a warning.
 func TestRenameDriverCalls(t *testing.T) {
 	w := newWorld(t, vfs.Mem{
-		"/lib/dgdtools.yml": "root: .\ndriver_object: /sys/driver\n",
+		"/lib/dgdtools.yml": "root: .\ndriver_config: mud.dgd\n",
+		"/lib/mud.dgd":      "driver_object = \"/sys/driver\";\n",
 		"/lib/sys/base.c":   "string path_read(string p) { return p; }\n",
 		"/lib/sys/driver.c": "inherit \"/sys/base\";\nstring path_write(string p) { return p; }\nvoid helper() {}\n",
 		"/lib/obj/user.c":   "void receive_message(string s) {}\nstring path_write(string p) { return p; }\n",
@@ -355,7 +357,8 @@ func TestClashThroughMacroAcross(t *testing.T) {
 // made when it runs is listed where it is.
 func TestRenameCallbackByMacro(t *testing.T) {
 	fs := vfs.Mem{
-		"/lib/dgdtools.yml": "root: .\ninclude_dirs: [/include]\n",
+		"/lib/dgdtools.yml": "root: .\ndriver_config: mud.dgd\n",
+		"/lib/mud.dgd":      "include_dirs = ({ \"/include\" });\n",
 		"/lib/include/m.h":  "#define NAME_FN \"query_name\"\n#define OTHER_FN \"other\"\n",
 		"/lib/std/living.c": "#include <m.h>\nstring query_name() { return \"x\"; }\n",
 		"/lib/obj/caller.c": "#include <m.h>\ninherit \"/std/living\";\nvoid f(string s) {\n    call_other(this_object(), NAME_FN);\n    call_other(this_object(), OTHER_FN);\n    call_out(s, 1);\n}\n",

@@ -6,7 +6,9 @@ with the object or the header that declares each.
 
 -- lib/dgdtools.yml --
 root: .
-include_dirs: [/include]
+driver_config: mud.dgd
+-- lib/mud.dgd --
+include_dirs = ({ "/include" });
 -- lib/include/std.h --
 /* Grundläggande */ #define BASE "/std/base"
 #define SET_MAX 10

@@ -256,20 +256,17 @@ var ruleLifecycleChain = &Rule{
 		"it (::create()) leaves the parent uninitialized. With several defining " +
 		"parents, label each inherit and chain each one. Proof-based: files with " +
 		"no explicit inherit, parents without the function, and unresolved " +
-		"parents are skipped. The function is the project's create function: the " +
-		"project key create, which is read from the driver config's create " +
-		"parameter and set by a mudlib whose auto object receives the driver's call " +
-		"and passes it on under another name; \"create\" when nothing says. The " +
-		"option names lists other functions to hold to the same rule.",
+		"parents are skipped. The function is the project's create function, " +
+		"conventions.create (\"create\" when it is not set; a mudlib whose auto object " +
+		"receives the driver's call and passes it on under another name sets the " +
+		"name its objects define). The option names lists other functions to hold " +
+		"to the same rule.",
 	Default: true, Severity: diag.Warning, CrossFile: true, CompiledOnly: true,
 	Options: func() any { return &lifecycleOptions{} },
 	Run: func(p *Pass) {
 		names := p.Options.(*lifecycleOptions).Names
 		if len(names) == 0 {
-			names = []string{defaultCreate}
-			if p.Config.Create != "" {
-				names[0] = p.Config.Create
-			}
+			names = []string{p.Config.Create()}
 		}
 		for _, d := range p.Tree.Decls {
 			fn, ok := d.(*syntax.FuncDecl)
@@ -287,10 +284,6 @@ var ruleLifecycleChain = &Rule{
 type lifecycleOptions struct {
 	Names []string `yaml:"names" doc:"the functions that must call what they override (default: the project's create function)"`
 }
-
-// defaultCreate is the create function assumed when neither the driver's
-// configuration nor the project's says: the name LPC libs use by custom.
-const defaultCreate = "create"
 
 type lifecycleParent struct {
 	labels []string

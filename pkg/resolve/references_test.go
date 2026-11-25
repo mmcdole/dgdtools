@@ -462,7 +462,8 @@ func TestReferencesAfterChange(t *testing.T) {
 // of the name as its pattern.
 func TestDynamicUses(t *testing.T) {
 	fs := vfs.Mem{
-		"/lib/dgdtools.yml": "root: .\ninclude_dirs: [/include]\n",
+		"/lib/dgdtools.yml": "root: .\ndriver_config: mud.dgd\n",
+		"/lib/mud.dgd":      "include_dirs = ({ \"/include\" });\n",
 		"/lib/obj/a.c":      "void do_look() {}\nvoid f(object ob, string v) {\n    call_out(\"do_\" + v, 1);\n    call_other(ob, v);\n    call_other(ob, \"do_look\");\n}\n",
 	}
 	w := newWorld(t, fs, "/lib")

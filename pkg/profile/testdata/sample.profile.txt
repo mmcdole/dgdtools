@@ -1,6 +1,6 @@
-dgdtools-profile 1
+dgdtools-profile 2
 {
- "format": 1,
+ "format": 2,
  "name": "mylib",
  "dialect": {
   "language": "lpc",
@@ -20,7 +20,7 @@ dgdtools-profile 1
  "auto_objects": [
   "/sys/auto"
  ],
- "create": "_F_create",
+ "driver_object": "/sys/driver",
  "relative_object_paths": "file",
  "covered": [
   "/include/",
@@ -33,11 +33,10 @@ dgdtools-profile 1
   "usr/*"
  ],
  "conventions": {
-  "specifier_macros": [
-   "public"
-  ],
+  "create": "setup",
   "macros": {
-   "FOREACH": "statement"
+   "FOREACH": "statement",
+   "public": "specifier"
   },
   "defines": [
    "__FEATURE__"
@@ -61,9 +60,6 @@ dgdtools-profile 1
   },
   "object_registry": {
    "load": 0
-  },
-  "format_registry": {
-   "scan": 1
   },
   "autosave_markers": [
    "set_save"

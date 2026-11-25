@@ -296,11 +296,13 @@ need the lib root (the directory that is `/` to the driver).
    mode.
 6. **The driver config is the compile database, and it is a build
    input.** DGD's own config file already states `include_dirs`,
-   `include_file`, `auto_object` and `typechecking`.
-   `profile_build: {driver_config: etc/mud.dgd}` reads them instead of
-   asking anyone to copy them; `dgdtools profile build` bakes them into a
-   profile (section 10), and a whole-lib lint uses them directly. The
-   same keys set in `dgdtools.yml` still win. The driver's absolute
+   `include_file`, `auto_object`, `driver_object` and `typechecking`.
+   `driver_config: etc/mud.dgd` reads them instead of asking anyone to
+   copy them; `dgdtools profile build` bakes them into a profile
+   (section 10), and a whole-lib lint uses them directly. It is their
+   one source: `dgdtools.yml` has no keys for them (only
+   `dialect.typechecking`, for a lib without its driver config at hand,
+   and that wins). The driver's absolute
    `directory` is *not* used as the root: it names a path on the
    production host.
 7. **Subdirectory and single-file runs** lint only the named files but
@@ -324,29 +326,29 @@ line are designed in [config.md](config.md). What the linter adds:
   misspelled setting must not be silently ignored.
 - **Project keys and settings.** What the linter resolves references
   against is the project: `root`, `profile`, `lib_path`, `exclude`,
-  `dialect` (with `typechecking` and `kfuns`), `include_dirs`, `include_file`,
-  `auto_objects`, `create`, `relative_object_paths` and `conventions`
-  (`specifier_macros`,
+  `driver_config` (and the driver settings read from it), `dialect`
+  (with `typechecking` and `kfuns`), `relative_object_paths` and
+  `conventions` (`create`,
   `macros: {NAME: expression|empty|specifier|type|string|statement|opaque}`,
-  `defines`, the call/object/format registries, `autosave_markers`,
-  `virtual_paths`). They are top-level keys, the same ones a profile's
-  manifest has, and there is one set per run. How a file is linted is
-  `lint:`, and that can differ per directory.
+  `defines`, the call and object registries, `autosave_markers`,
+  `virtual_paths`). They are top-level keys, and there is one set per
+  run; a profile's manifest carries the same facts. How a file is linted
+  is `lint:`, and that can differ per directory.
 - **Nothing about one lib is in the code.** The tool knows the driver:
   its keywords, its predefined macros, `call_other`, `call_out`,
   `compile_object`, `find_object`, `clone_object`, `sscanf`,
   `this_object`, and the parameters of its config file. Everything else
-  is a convention and has no default: which names are empty specifier
-  macros (`public` is some lib's `#define`, not a keyword), what marks
-  an object that saves itself, which of the lib's functions take a
-  function name. The function a new object is initialized by is the
-  project key `create`, read from the driver config's `create`
-  parameter; `lifecycle-chain` checks that one, and falls back to the
-  customary `create` when nothing says. A lib whose auto object receives
-  the driver's call under one name and passes it on under another (the
-  kernel library: `_F_create`, then `create`; the corpus lib:
-  `__create`, then `create`) sets the key to what its objects define. It
-  is a project key and not an option of the rule because it is a fact
+  is a convention and has no default: which names are specifier
+  macros (`public` is some lib's `#define`, not a keyword:
+  `conventions.macros: {public: specifier}`), what marks an object that
+  saves itself, which of the lib's functions take a function name. The
+  function a new object is initialized by is `conventions.create`,
+  default the customary `create`; `lifecycle-chain` checks that one. The
+  driver config's `create` parameter is not read for it: in a lib whose
+  auto object receives the driver's call under one name and passes it on
+  under another (the kernel library: `_F_create`, then `create`; the
+  corpus lib: `__create`, then `create`), it is not what objects define.
+  It is a convention and not an option of the rule because it is a fact
   about the lib that a profile must carry: a wizard's checkout has no
   root config, so a name that stood only in the root's rule options
   would not reach it, and the rule would find nothing in any checkout.
@@ -384,7 +386,7 @@ line are designed in [config.md](config.md). What the linter adds:
   suspicious, `C…` convention), a group, a default severity and a default
   on/off. `lint.rules` maps a rule name, code, or group (`all`, `syntax`,
   `runtime`, `suspicious`, `convention`) to `off | info | warning | error`
-  or to a mapping `{severity: …, max_per_file: …, <options>}`. Rule
+  or to a mapping `{severity: …, <options>}`. Rule
   entries beat group entries beat `all`. Giving a severity enables the
   rule.
 - **Rule options are typed.** A rule that has options declares them as a
@@ -398,8 +400,8 @@ line are designed in [config.md](config.md). What the linter adds:
   same mapping set the same rule twice; like a duplicate key in YAML it
   is an error, not a precedence to remember.
 - **Who validates what.** `Config.Validate` is the one check of what the
-  configuration defines: enumerated values (`lint.fail_on`,
-  `relative_object_paths`, `conventions.macros` classes, severities,
+  configuration defines: enumerated values (`relative_object_paths`,
+  `conventions.macros` classes, severities,
   the format keys), ranges (`dialect.typechecking`, argument indexes),
   and the keys a settings scope may not have. `config.Load` runs it, so
   every command refuses the same file. The rule table is the linter's,
@@ -485,8 +487,9 @@ line are designed in [config.md](config.md). What the linter adds:
   count, not by line number, so edits elsewhere in a file do not
   resurrect a finding. This is the PHPStan/Psalm baseline model; it
   needs no VCS, unlike golangci-lint's `--new-from-rev`. `--no-baseline`
-  shows everything. The baseline and `lint.fail_on` describe a run, so
-  they are root-config keys.
+  shows everything. The baseline describes a run, so it is a
+  root-config key; the severity that fails a run (`--fail-on`) and the
+  per-file cap (`--max-per-file`) are flags, not keys.
 
 ### 4.1 CLI
 
@@ -527,7 +530,7 @@ own is another project ([config.md](config.md) section 3): `lint` passes
 over its files and says so in a note (`nested-project`), `format`
 formats them by that project's settings.
 
-**Exit codes:** `0` no findings at or above `fail_on`; `1` findings;
+**Exit codes:** `0` no findings at or above `--fail-on`; `1` findings;
 `2` usage or configuration error (including an unknown rule name and a
 path that does not exist) or an internal error on some file or in some
 rule; `130` interrupted (Ctrl-C stops the run in an orderly way and
@@ -824,11 +827,11 @@ Properties the core guarantees (each has a test in `pkg/lint` or
   follow from its group: `bad-directive` is a syntax rule that does
   report there, because the preprocessor reads directives in skipped
   branches too); (2) drops what a suppression comment covers; (3)
-  subtracts the baseline; (4) applies `max_per_file`, last, so that a
+  subtracts the baseline; (4) applies `--max-per-file`, last, so that a
   limit counts what would be shown and cannot hide a new finding behind
   suppressed or baselined ones. What (4) holds back is counted
-  (`Stats.Capped`, in the summary); `--max-per-file -1` lifts the
-  limits, and `--write-baseline` always does.
+  (`Stats.Capped`, in the summary); there is no limit unless the flag
+  gives one, and `--write-baseline` lifts it.
 - **Reports name files the way the user did.** `pkg/report` writes a
   file under `Options.BaseDir` (the front end gives its working
   directory) by its path from there and any other by its absolute path;
@@ -1333,14 +1336,19 @@ Details that keep stubs honest:
   because "under a covered directory but deliberately absent" must read
   as unknown, not as missing.
 
-**File format:** gzip of `dgdtools-profile 1`, the manifest, and the stubs
+**File format:** gzip of `dgdtools-profile 2`, the manifest, and the stubs
 in path order (`=== /std/room.c` separators). No timestamps: the same lib
-gives the same bytes. Versioned; a newer format is refused with a
-"rebuild the profile" message.
+gives the same bytes. Versioned: an older format is refused with "rebuild
+the profile with dgdtools profile build", a newer one with "update
+dgdtools". Format 2 (0.4) moved `create` into the conventions and
+dropped `specifier_macros` and `format_registry` from them, as the
+configuration did; a format 1 profile read as format 2 would lose its
+specifier macros silently, so it is not read.
 
 **Selection** (`profile_build`) is by use, not by a hand-picked list: a
 file referenced (inherit, `#include`, or a constant call/clone/find
-target) from at least `share_min_owners` distinct owners is shared, where
+target) from at least `share_min_owners` distinct owners (default 5;
+0 turns inference off) is shared, where
 an owner is one per-wizard tree (`checkouts`) or one other top-level
 directory. Added to that: files matching `share`, everything under the
 include dirs, the force-included header, the auto objects, and the
@@ -1389,7 +1397,7 @@ fewest wizard files (55 under `/players`, 189 under `/d`, against 874 and
 - **Whole lib + profile:** if the profile's force-included header exists
   under the root, the project is a whole lib; the profile only supplies
   settings, and stubs fill nothing because every file is on disk. A whole
-  lib with `profile_build.driver_config` needs no profile at all.
+  lib with `driver_config` needs no profile at all.
 - **Partial checkout:** otherwise there is no lib root on disk: the
   checkout directory stands for its lib path and the profile's stubs for
   the rest.

@@ -89,13 +89,11 @@ func item(t *testing.T, c *resolve.Completion, name string, fn bool) resolve.Ite
 }
 
 const completeConfig = `root: .
-include_dirs: [/include]
-include_file: /include/auto.h
-auto_objects: [/sys/auto]
+driver_config: ../mud.dgd
 dialect:
   kfuns: ["int *rusage()"]
 conventions:
-  specifier_macros: [public]
+  macros: { public: specifier }
   call_registry:
     add_action: { function: 0 }
     store_fp: [{ object: 0, function: 1 }, { function: 0 }]
@@ -104,6 +102,7 @@ conventions:
 func completeLib() vfs.Mem {
 	return vfs.Mem{
 		"/lib/dgdtools.yml":        completeConfig,
+		"/mud.dgd":                 driverConfig,
 		"/lib/include/auto.h":      "#define AUTO 1\n",
 		"/lib/include/std.h":       "#define STD \"/std/base\"\n#define ROOM_D \"/sys/roomd\"\n// The square of x.\n#define SQUARE(x) ((x)*(x))\n#define ME this_object()\n#define status int\n#define FOREVER for (;;)\n",
 		"/lib/include/sys/types.h": "",

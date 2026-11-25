@@ -77,7 +77,7 @@ func lintCmd(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 	fs.BoolVar(&noBaseline, "no-baseline", false, "report findings that are in the baseline too")
 	fs.BoolVar(&local, "local", false, "file-local rules only; do not use the mudlib index")
 	fs.BoolVar(&stats, "stats", false, "print per-rule counts and what could not be verified")
-	fs.IntVar(&maxPerFile, "max-per-file", 0, "report at most `n` findings per rule per file; -1 lifts the limits of the configuration")
+	fs.IntVar(&maxPerFile, "max-per-file", 0, "report at most `n` findings per rule per file (0: no limit)")
 	fs.BoolVar(&quiet, "quiet", false, "no summary on standard error")
 	fs.BoolVar(&quiet, "q", false, "short for --quiet")
 	fs.BoolVar(&exit0, "exit-zero", false, "exit 0 even when there are findings")
@@ -135,9 +135,8 @@ func lintCmd(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 	if err != nil {
 		return fail(err)
 	}
-	// What the command line says about the run wins over the project's
-	// configuration, which is not touched.
-	threshold := l.FailOn()
+	// The severity that fails the run is the command line's to say.
+	threshold := diag.Error
 	if failOn != "" {
 		var ok bool
 		if threshold, ok = diag.ParseSeverity(failOn); !ok {
@@ -148,7 +147,7 @@ func lintCmd(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 		baseline = p.abs(baseline)
 	}
 	if writeBaseline {
-		maxPerFile = -1 // a baseline holds every finding
+		maxPerFile = 0 // a baseline holds every finding
 	}
 	req := lint.Request{Paths: paths, Options: lint.Options{
 		Select:     split(sel),

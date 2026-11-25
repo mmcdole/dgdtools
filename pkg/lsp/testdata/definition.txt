@@ -4,11 +4,13 @@ is known of.
 
 -- lib/dgdtools.yml --
 root: .
-include_dirs: [/include]
-auto_objects: [/sys/auto]
+driver_config: mud.dgd
 conventions:
   call_registry:
     add_action: { function: 0 }
+-- lib/mud.dgd --
+include_dirs = ({ "/include" });
+auto_object = "/sys/auto";
 -- lib/include/std.h --
 #define BASE "/std/base"
 #define DAEMON "/sys/daemon"

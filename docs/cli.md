@@ -24,7 +24,7 @@ Run `dgdtools <command> -h` to see all flags for a command. Flags can be placed 
 | Code | Meaning |
 |---|---|
 | `0` | Success (no lint failures, no formatting changes needed, or no unresolved rename candidates) |
-| `1` | Findings or pending items: lint findings at or above `fail_on`, files that `format --check` would modify, or unconfirmed possible matches left by `rename` |
+| `1` | Findings or pending items: lint findings at or above `--fail-on` (default `error`), files that `format --check` would modify, or unconfirmed possible matches left by `rename` |
 | `2` | Usage, configuration, I/O, or internal error, or a refused rename |
 | `130` | Interrupted |
 
@@ -45,6 +45,8 @@ dgdtools lint --enable RULES --ignore RULES   # Adjust the configured rule set
 dgdtools lint --fix dir/                      # Apply safe fixes and report remaining findings (--diff previews)
 dgdtools lint --write-baseline                # Snapshot existing findings into a baseline file
 dgdtools lint --stats dir/                    # Print per-rule counts and unverified stats
+dgdtools lint --fail-on warning               # Exit 1 on warnings too (default: errors only)
+dgdtools lint --max-per-file 5                # At most 5 findings per rule per file
 dgdtools rules                                # List all rules with codes, defaults, and scope
 dgdtools explain RULE                         # Explain a specific rule and its options
 ```
@@ -157,7 +159,7 @@ if ((sz = load_items()) && ready) {    /* allowed: parenthesized explicitly */
 
 Invalid assignment targets that DGD rejects at compile time (such as `!ob = present(...)`) are left to DGD rather than duplicated as lint rules.
 
-**Lifecycle chaining (`lifecycle-chain`):** Checks that overridden lifecycle functions call their inherited implementation. By default, this checks the project's `create` function (from `profile_build.driver_config`, the profile, or the `create` key in `dgdtools.yml`, defaulting to `create`). You can add more functions via rule options: `lifecycle-chain: { names: [create, reset] }`.
+**Lifecycle chaining (`lifecycle-chain`):** Checks that overridden lifecycle functions call their inherited implementation. By default, this checks the project's `create` function (`conventions.create` in `dgdtools.yml` or the profile, defaulting to `create`). You can add more functions via rule options: `lifecycle-chain: { names: [create, reset] }`.
 
 Files with no explicit `inherit`, parents that don't define the function, and unresolved parents are skipped. When multiple inherited parents define the function, use labeled inherits to call each one:
 

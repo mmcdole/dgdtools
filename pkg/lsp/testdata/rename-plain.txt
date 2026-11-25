@@ -3,7 +3,9 @@ versions.
 
 -- lib/dgdtools.yml --
 root: .
-include_dirs: [/include]
+driver_config: mud.dgd
+-- lib/mud.dgd --
+include_dirs = ({ "/include" });
 -- lib/obj/a.c --
 void create() {
     int n;
