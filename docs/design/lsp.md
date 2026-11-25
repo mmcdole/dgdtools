@@ -765,7 +765,8 @@ package without a binary for the rest.
   language needs. Detection is the Vim rule, asked from
   `magic-mode-alist` (before `auto-mode-alist`, so no C hook runs
   first), with `dgdlpc-roots`; remote files are left to C, as URL
-  buffers are in Vim. The name test is in the autoloads, so the package
+  buffers are in Vim, unless a remote directory is listed there (matched
+  as text, for highlighting and indentation only). The name test is in the autoloads, so the package
   loads with the first `.c`/`.h` file. The server is added to
   `eglot-server-programs` when Eglot loads (not before, and Eglot is
   never loaded for it); it is started by the user's `eglot-ensure` in

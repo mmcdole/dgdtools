@@ -54,7 +54,12 @@
 (defcustom dgdlpc-roots nil
   "Directories whose .c and .h files are DGD LPC without a dgdtools.yml.
 A file under one of these is opened in `dgdlpc-mode' and shares one
-language server with the rest of the directory."
+language server with the rest of the directory.
+
+A remote directory may be listed too, written as the names of its
+files begin, as in \"/ssh:me@host:/mud/lib\".  It is matched as
+text, without asking the server anything, and gets highlighting and
+indentation; it is not a project for the language server."
   :type '(repeat directory))
 
 (defcustom dgdlpc-indent-offset 4
@@ -115,25 +120,48 @@ A .dgdtools.yml counts too.  Return nil when there is none."
          (or (file-exists-p (expand-file-name "dgdtools.yml" d))
              (file-exists-p (expand-file-name ".dgdtools.yml" d))))))
 
+(defun dgdlpc--listed-root (dir remote)
+  "Return the directory of `dgdlpc-roots' that holds DIR, or nil.
+With REMOTE non-nil only the remote entries are asked, and they are
+compared as text; otherwise only the local ones.  A local file is thus
+never the cause of a connection."
+  (let (found)
+    (dolist (root dgdlpc-roots found)
+      (when (and (not found)
+                 (eq (not remote) (not (file-remote-p root)))
+                 (if remote
+                     ;; "host:" is the remote home: a slash after the
+                     ;; colon would name the server's root instead.
+                     (string-prefix-p (if (string-match-p "[/:]\\'" root)
+                                          root
+                                        (concat root "/"))
+                                      dir)
+                   (file-in-directory-p dir root)))
+        (setq found root)))))
+
 (defun dgdlpc--lib-root (dir)
   "Return the root of the lib DIR is in, or nil.
 That is the nearest directory with a dgdtools configuration, else the
-directory of `dgdlpc-roots' that holds DIR.  Remote directories are in
-no lib."
-  (unless (file-remote-p dir)
+directory of `dgdlpc-roots' that holds DIR.  A remote directory is in
+a lib only when listed there: nothing above it is looked up."
+  (if (file-remote-p dir)
+      (dgdlpc--listed-root dir t)
     (or (dgdlpc-root dir)
-        (let (found)
-          (dolist (root dgdlpc-roots found)
-            (when (and (not found) (file-in-directory-p dir root))
-              (setq found root)))))))
+        (dgdlpc--listed-root dir nil))))
 
 ;;;###autoload
 (defun dgdlpc-lib-file-p (file)
   "Return non-nil if FILE lies in a DGD lib.
 That is, a directory above it has a dgdtools.yml or a .dgdtools.yml,
-or it is under one of `dgdlpc-roots'.  A remote file (TRAMP) is never
-in a lib: its directories are not looked up."
-  (and (dgdlpc--lib-root (file-name-directory (expand-file-name file))) t))
+or it is under one of `dgdlpc-roots'.  A remote file is in a lib only
+under a remote entry of `dgdlpc-roots': its directories are not looked
+up."
+  (and (dgdlpc--lib-root
+        ;; Expanding a remote name can ask the server where home is.
+        (file-name-directory (if (file-remote-p file)
+                                 file
+                               (expand-file-name file))))
+       t))
 
 ;; The rule runs before `auto-mode-alist' (as `magic-mode-alist' does),
 ;; so that a .c file of a lib is never put in `c-mode' first, with the C
@@ -442,7 +470,8 @@ The lib is where `dgdlpc-root' or `dgdlpc-roots' say, so that the files
 of one lib share one language server, rooted where the server finds
 the lib's dgdtools.yml.  For anything but Eglot this returns nil, and
 `project-current' finds what it would otherwise."
-  (when (bound-and-true-p eglot-lsp-context)
+  (when (and (bound-and-true-p eglot-lsp-context)
+             (not (file-remote-p dir)))
     (let ((root (dgdlpc--lib-root dir)))
       (when root
         (cons 'transient (file-name-as-directory (expand-file-name root)))))))

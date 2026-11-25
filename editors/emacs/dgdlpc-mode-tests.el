@@ -122,6 +122,18 @@ buffers opened in it are killed after."
                      (expand-file-name "lib/" dir)))
       (should-not (dgdlpc-root (expand-file-name "plain/" dir))))))
 
+(ert-deftest dgdlpc-detection-remote ()
+  "A remote file is LPC only under a remote entry of `dgdlpc-roots'."
+  (let ((dgdlpc-roots '("/ssh:nohost:/mud/lib" "/ssh:other:")))
+    (should (dgdlpc-lib-file-p "/ssh:nohost:/mud/lib/std/x.c"))
+    (should (dgdlpc-lib-file-p "/ssh:other:obj/x.h"))
+    ;; Not a neighbour with a longer name, nor anything unlisted.
+    (should-not (dgdlpc-lib-file-p "/ssh:nohost:/mud/library/x.c"))
+    (should-not (dgdlpc-lib-file-p "/ssh:elsewhere:/mud/lib/x.c"))
+    ;; Eglot gets no project from a remote entry.
+    (let ((eglot-lsp-context t))
+      (should-not (dgdlpc-project-find "/ssh:nohost:/mud/lib/std/")))))
+
 ;;;; Comments, highlighting and the dialect
 
 (ert-deftest dgdlpc-comments ()

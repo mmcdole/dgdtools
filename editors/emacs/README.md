@@ -47,7 +47,22 @@ The mode does not claim `*.c` or `*.h` files globally—normal C files stay in `
 (setq dgdlpc-roots '("~/mud/players/me"))
 ```
 
-The check runs from `magic-mode-alist`, before `auto-mode-alist`, so an LPC file is never put in `c-mode` first and your C hooks (a C language server, a C style) do not run on it. Remote files (TRAMP) are not looked up and stay C.
+The check runs from `magic-mode-alist`, before `auto-mode-alist`, so an LPC file is never put in `c-mode` first and your C hooks (a C language server, a C style) do not run on it.
+
+Remote files (TRAMP, or another handler that answers `file-remote-p`) are never searched for a `dgdtools.yml`, and stay C unless their directory is listed in `dgdlpc-roots`. Write the entry as the buffer's file names begin (`C-h v buffer-file-name` shows one):
+
+```elisp
+(setq dgdlpc-roots '("/ssh:me@host:/mud/lib"))
+```
+
+A listed remote directory gets highlighting and indentation. The mode does not set up the language server for it, so if you start Eglot from the mode hook, leave remote buffers out:
+
+```elisp
+(add-hook 'dgdlpc-mode-hook
+          (lambda ()
+            (unless (file-remote-p default-directory)
+              (eglot-ensure))))
+```
 
 To choose the mode yourself, put a mode line at the top of a file:
 
