@@ -2,8 +2,8 @@
 // Code extension (vscode/: the TextMate grammar, the language
 // configuration, and the client of the language server, in TypeScript),
 // the Vim and Neovim plugin (vim/: the runtime files, and Neovim's
-// entry for the language server), the lines for Helix (helix/), and what
-// the grammars share (common/): the word list and the sample files.
+// entry for the language server), and what the grammars share
+// (common/): the word list and the sample files.
 //
 // There is no Go code here to import. The package exists for its tests,
 // which keep the grammars from drifting away from the tool:

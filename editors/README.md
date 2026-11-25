@@ -5,13 +5,12 @@
 1. **Syntax grammars** that work offline without a running server, matching `dgdtools`'s own lexer tokens.
 2. **The language server (`dgdtools lsp`)**, which adds diagnostics, quick fixes, formatting, navigation, completion, refactoring, and semantic highlighting.
 
-The language ID / filetype is **`dgdlpc`** everywhere (VS Code, Vim/Neovim, Helix). This avoids conflicting with existing `lpc` plugins built for LDMud or FluffOS, which highlight keywords DGD doesn't have and miss DGD keywords like `nil`, `atomic`, and `rlimits`.
+The language ID / filetype is **`dgdlpc`** everywhere (VS Code, Vim/Neovim). This avoids conflicting with existing `lpc` plugins built for LDMud or FluffOS, which highlight keywords DGD doesn't have and miss DGD keywords like `nil`, `atomic`, and `rlimits`.
 
 | Editor | Status |
 |---|---|
 | [VS Code](vscode/README.md) | Extension with TextMate grammar, language config, and bundled `dgdtools` LSP server |
 | [Vim & Neovim](vim/README.md) | Plugin with filetype detection, syntax, ftplugin, indent, and built-in LSP setup for Neovim 0.11+ |
-| [Helix](helix/README.md) | LSP configuration using C tree-sitter highlighting (no DGD LPC tree-sitter grammar yet) |
 | Other LSP editors | Run `dgdtools lsp` over stdio for language `dgdlpc`, using `dgdtools.yml` / `.dgdtools.yml` as root markers |
 
 Shared grammar word lists (`dgdlpc.json`) and snapshot test fixtures live in `common/`.
@@ -22,7 +21,6 @@ None of the editor integrations claim `*.c` or `*.h` globally, so C projects on 
 
 - **VS Code:** Opt-in per folder via workspace `files.associations` (the extension offers a command and prompt when `dgdtools.yml` is present).
 - **Vim / Neovim:** Activated only under directories containing `dgdtools.yml` / `.dgdtools.yml`, or directories listed in `g:dgdlpc_roots`.
-- **Helix:** Configured per project in `.helix/languages.toml`.
 
 ## The language server (`dgdtools lsp`)
 

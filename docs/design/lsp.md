@@ -626,11 +626,10 @@ formatter.
 
 **tree-sitter is deferred**: a second grammar with an external scanner
 for directives anywhere, query files and each editor's packaging (6 to 8
-days, and maintenance) for Helix and Zed highlighting. It would be for
-highlighting only, never the linter's parser
+days, and maintenance) for tree-sitter-only editors such as Helix and
+Zed. It would be for highlighting only, never the linter's parser
 ([architecture.md](architecture.md) 2.1). Until there are users asking,
-Neovim uses the Vim syntax plus semantic tokens, and Helix and Zed their
-C grammar.
+Neovim uses the Vim syntax plus semantic tokens.
 
 ### 10.2 Semantic tokens
 
@@ -662,8 +661,7 @@ grammar's scopes for themes without semantic rules
 
 ## 11. Editor clients
 
-The language is `dgdlpc` everywhere (VS Code id, Vim filetype, Helix and
-Zed name). `lpc` is taken in both ecosystems by tooling for other
+The language is `dgdlpc` everywhere (VS Code id, Vim filetype). `lpc` is taken in both ecosystems by tooling for other
 drivers, and a file handed to two grammars and two servers under one id
 is worse than a new word.
 
@@ -747,7 +745,7 @@ package without a binary for the rest.
   programs. A package per platform is delivered and updated by the
   marketplace like any other extension and works offline.
 
-### 11.3 Vim, Neovim, Helix, Zed, others
+### 11.3 Vim, Neovim, others
 
 - **Vim and Neovim**: `editors/vim` is one plugin for both (Vim reads
   neither `lsp/` nor `plugin/*.lua`). For Neovim 0.11+,
@@ -758,13 +756,7 @@ package without a binary for the rest.
   has the lines for vim-lsp, ALE and coc.nvim, including how to pass the
   profile and lib path. Vim clients and Neovim on Linux usually do not
   watch files (section 4).
-- **Helix**: a `languages.toml` entry in `editors/helix/README.md`, with
-  queries that inherit C's. Helix highlights only through tree-sitter and
-  does not use semantic tokens, so LPC gets C highlighting until the
-  deferred grammar exists.
-- **Zed**: a language and its server are added only by an extension;
-  none is written.
-- Emacs (eglot), Sublime (LSP), Kate: a line of configuration each,
+- Helix, Emacs (eglot), Sublime (LSP), Kate: a line of configuration each,
   documented by the README for any client, not maintained.
 
 ## 12. Testing

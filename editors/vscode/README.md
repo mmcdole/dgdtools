@@ -138,5 +138,5 @@ A `dgdtools.yml` takes precedence over `dgdtools.profile` and
 - [dgdtools](https://github.com/mmcdole/dgdtools#readme): rules,
   formatter, configuration, profiles
 - [Editor support](https://github.com/mmcdole/dgdtools/blob/main/editors/README.md):
-  Vim, Neovim, Helix and building the extension
+  Vim, Neovim and building the extension
 - [Issues](https://github.com/mmcdole/dgdtools/issues)
