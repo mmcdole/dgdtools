@@ -19,6 +19,15 @@ mud/
 
 See [dgdtools.example.yml](../dgdtools.example.yml) for a short commented reference and [examples/viking/dgdtools.yml](../examples/viking/dgdtools.yml) for a real-world mudlib configuration.
 
+### Linked folders
+
+A folder linked into the mudlib from outside it (a symbolic link, or a junction on Windows), such as `lib/players/knubo` → `~/src/knubo`, is part of the mudlib, as it is to the driver. Its files are named by their path in the mudlib (`/players/knubo/raven.c`), and whole-mudlib lint, references, rename and `profile build` cover them. `exclude: [players/knubo/**]` skips such a folder.
+
+- A link to a folder already inside the mudlib is not walked again: its files are linted once, under their own names. A link that leads back up (a loop) is not followed.
+- When two links lead to the same folder, both are walked; the editor names the folder by the first link in name order.
+- The language server knows a linked folder by either name. An editor that resolves links (Emacs with Eglot) opens `~/src/knubo/raven.c` by that path; it gets the mudlib's configuration and is answered under the path it used. The server finds the link in the mudlibs of the workspace folders' projects and of the projects it has resolved, when it first meets such a path; a link made later is seen after a restart or a change to `dgdtools.yml`. An excluded linked folder is known by its mudlib path only.
+- On the command line, give a linked file by its mudlib path (`lib/players/knubo/raven.c`). Its real path is linted as a file outside the mudlib.
+
 ### Example `dgdtools.yml`
 
 ```yaml
@@ -65,7 +74,7 @@ Configuration keys fall into two categories:
 | `root` | Directory representing mudlib `/`, relative to the config file (`root: .` for the config's own directory). Never guessed: without `root`, `profile`, or `lib_path`, only file-local rules run. If `profile` or `lib_path` is set without `root`, the config file's directory is treated as a partial checkout. |
 | `profile` | Mudlib profile to work against: a profile name (looked up as `NAME.profile`) or a file path. Supplies driver settings, shared headers, and shared object signatures. Local files on disk always override the profile. |
 | `lib_path` | The mudlib path of a partial checkout (e.g., `/usr/ann`) when its filesystem path doesn't match the profile's `checkouts` patterns. |
-| `exclude` | Globs relative to the mudlib root that are skipped during directory walks. Files named explicitly on the command line are always processed. |
+| `exclude` | Globs relative to the mudlib root that are skipped during directory walks, linked folders included (matched by their path in the mudlib). Files named explicitly on the command line are always processed. |
 | `driver_config` | The DGD driver's config file, relative to `dgdtools.yml`: where the driver settings are read from, for whole-mudlib lint, the language server, and `dgdtools profile build`. dgdtools reads `include_dirs` (include dirs without a leading `/` are relative to the including file; dirs starting with `~` are treated as unknown), `include_file` (force-included header), `auto_object`, `driver_object` (whose driver-called functions cannot be renamed), and `typechecking`. A project with a profile gets these from the profile instead, and does not read `driver_config`. |
 | `driver` | The driver settings written in `dgdtools.yml`, for a mudlib without its driver config at hand: `include_dirs`, `include_file`, `auto_object`, `driver_object`, and `typechecking`, named and read as in the driver config (e.g., `driver: { include_dirs: [/include], auto_object: /kernel/auto, typechecking: 2 }`). Each key is optional. One that is set wins over `driver_config` and the profile; the rest come from them. |
 | `dialect` | Driver build flags and extensions: `slash_slash` (default `true`), `closures` (default `false`), and `kfuns` (extra extension-module kfun prototypes, e.g., `"int *rusage()"` or `"string sha256(string text, varargs int rounds)"`). Stock DGD kfuns are built in. |

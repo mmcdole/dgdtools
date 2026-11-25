@@ -131,6 +131,49 @@ func pathOf(uri string) string {
 	return filepath.Clean(p)
 }
 
+// A file in a directory a lib links to from outside is the file through
+// the link, whatever the URI names it by: an editor that resolves links
+// (Eglot) names it by its real path, which the driver never sees. The
+// tools know it by its path in the lib, and the client hears of it by
+// the URI it used for the document.
+
+// pathOf returns the file a URI of the client's names, as the tools know
+// it (session.Session.LibPath); "" when it names none. Called with s.mu
+// held.
+func (s *server) pathOf(uri string) string {
+	p := pathOf(uri)
+	if p == "" || s.session == nil {
+		return p
+	}
+	var dirs []string
+	for _, f := range s.folders {
+		if f.dir != "" {
+			dirs = append(dirs, f.dir)
+		}
+	}
+	return s.session.LibPath(p, dirs...)
+}
+
+// uris returns what names a file the tools name to the client: the URI
+// of its open document, which is the client's own, and uriOf's for one
+// that is not open. Called without s.mu.
+func (s *server) uris() func(path string) string {
+	own := map[string]string{}
+	s.mu.Lock()
+	for uri, doc := range s.docs {
+		if have, ok := own[doc.path]; doc.path != "" && (!ok || uri < have) {
+			own[doc.path] = uri
+		}
+	}
+	s.mu.Unlock()
+	return func(path string) string {
+		if uri, ok := own[path]; ok {
+			return uri
+		}
+		return uriOf(path)
+	}
+}
+
 // uriOf returns the URI of a location the tools name: a file by its
 // absolute path, or a stub of a profile, which is named by a URI already
 // and needs no more than escaping.

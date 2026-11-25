@@ -43,9 +43,10 @@ func (s *server) references(ctx context.Context, p *ReferenceParams) (any, error
 		return nil, nil
 	}
 	out := make([]Location, 0, len(refs.Sites))
+	uri := s.uris()
 	for _, site := range refs.Sites {
 		if rng, ok := siteRange(texts, site); ok {
-			out = append(out, Location{URI: uriOf(site.Path), Range: rng})
+			out = append(out, Location{URI: uri(site.Path), Range: rng})
 		}
 	}
 	if note := referencesNote(refs); note != "" {

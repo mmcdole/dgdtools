@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"maps"
 	"math/rand"
+	"os"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -323,4 +326,46 @@ func TestDifferential(t *testing.T) {
 			}
 		}
 	}
+}
+
+// A file of a directory a lib links to from outside is known by its path
+// in the lib, whichever path it is named by; one no lib links to, or one
+// of a lib of its own, by its own.
+func TestLibPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("making a link needs a privilege on Windows")
+	}
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	for f, text := range map[string]string{
+		"mud/dgdtools.yml":         "root: lib\n",
+		"mud/lib/std/item.c":       "",
+		"outside/knubo/raven.c":    "",
+		"outside/own/a.c":          "",
+		"outside/own/dgdtools.yml": "root: .\n",
+		"outside/stray.c":          "",
+	} {
+		p := filepath.Join(dir, filepath.FromSlash(f))
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		require.NoError(t, os.WriteFile(p, []byte(text), 0o644))
+	}
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "mud/lib/players"), 0o755))
+	for _, name := range []string{"knubo", "own"} {
+		require.NoError(t, os.Symlink(filepath.Join(dir, "outside", name), filepath.Join(dir, "mud/lib/players", name)))
+	}
+	mud, lib := filepath.Join(dir, "mud"), filepath.Join(dir, "mud/lib")
+	at := func(rel string) string { return filepath.Join(dir, filepath.FromSlash(rel)) }
+
+	s := session.New(vfs.OS{}, config.DiscoverOptions{})
+	assert.Equal(t, at("outside/knubo/raven.c"), s.LibPath(at("outside/knubo/raven.c")), "no lib is known yet")
+	assert.Equal(t, filepath.Join(lib, "players/knubo/raven.c"), s.LibPath(at("outside/knubo/raven.c"), mud), "the folder's lib is")
+	assert.Equal(t, filepath.Join(lib, "players/knubo/new.c"), s.LibPath(at("outside/knubo/new.c"), mud), "a file not there yet")
+	assert.Equal(t, filepath.Join(lib, "std/item.c"), s.LibPath(filepath.Join(lib, "std/item.c"), mud))
+	assert.Equal(t, at("outside/stray.c"), s.LibPath(at("outside/stray.c"), mud))
+	assert.Equal(t, at("outside/own/a.c"), s.LibPath(at("outside/own/a.c"), mud), "a lib of its own")
+
+	s = session.New(vfs.OS{}, config.DiscoverOptions{})
+	_, err = s.Project(lib)
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(lib, "players/knubo/raven.c"), s.LibPath(at("outside/knubo/raven.c")), "a lib resolved already is known")
 }

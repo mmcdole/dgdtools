@@ -29,6 +29,7 @@ func (s *server) definition(ctx context.Context, p *DefinitionParams) (any, erro
 		return nil, nil
 	}
 	origin := here.Range(ref.Start, ref.End)
+	uri := s.uris()
 	var links []LocationLink
 	var locations []Location
 	for _, def := range ref.Defs {
@@ -38,8 +39,8 @@ func (s *server) definition(ctx context.Context, p *DefinitionParams) (any, erro
 		}
 		target := m.Range(def.Start, def.End)
 		links = append(links, LocationLink{OriginSelectionRange: origin,
-			TargetURI: uriOf(def.Path), TargetRange: target, TargetSelectionRange: target})
-		locations = append(locations, Location{URI: uriOf(def.Path), Range: target})
+			TargetURI: uri(def.Path), TargetRange: target, TargetSelectionRange: target})
+		locations = append(locations, Location{URI: uri(def.Path), Range: target})
 	}
 	switch {
 	case len(links) == 0:

@@ -1,8 +1,10 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -67,6 +69,10 @@ type Project struct {
 	explicit bool   // the config was named by the caller: nested files are not looked for
 	noFiles  bool   // no configuration file of any kind is read
 	settingsCache
+
+	// links are the lib's links to directories outside it, found once.
+	linksOnce sync.Once
+	links     fileset.Links
 }
 
 // HasLib reports whether cross-file analysis is possible: the lib is on
@@ -94,6 +100,29 @@ func (prj *Project) Inputs() []string { return slices.Clone(prj.inputs) }
 // Tree returns where the project's lib is on disk.
 func (prj *Project) Tree() fileset.Tree {
 	return fileset.Tree{Root: prj.Root, CheckoutDir: prj.CheckoutDir, CheckoutLib: prj.CheckoutLib}
+}
+
+// Links returns the links in the lib on disk to directories outside it,
+// which are directories of the lib (fileset.Tree.Links). The lib is
+// walked for them once, when first asked: a link made later is known to
+// the project resolved after the next change to its configuration.
+func (prj *Project) Links() fileset.Links {
+	prj.linksOnce.Do(func() {
+		if prj.fs != nil {
+			prj.links, _ = prj.Tree().Links(context.Background(), prj.fs, fileset.NewMatcher(prj.Config.Exclude))
+		}
+	})
+	return prj.links
+}
+
+// LibPath returns the path the file or directory at path, a path with
+// no links in it, has in the project's lib: by way of the link to the
+// directory outside the lib it is in. False when it is in none.
+func (prj *Project) LibPath(path string) (string, bool) {
+	if !prj.HasLib() {
+		return "", false
+	}
+	return prj.Links().Path(path)
 }
 
 // DiscoverOptions are what the caller knows that the file system does
@@ -463,6 +492,20 @@ func (w *Workspace) Project(path string) (*Project, error) {
 		w.projects[key] = f
 	}
 	return f.prj, f.err
+}
+
+// Projects returns the projects resolved so far, ordered by their
+// config files' paths.
+func (w *Workspace) Projects() []*Project {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var out []*Project
+	for _, key := range slices.Sorted(maps.Keys(w.projects)) {
+		if f := w.projects[key]; f.prj != nil {
+			out = append(out, f.prj)
+		}
+	}
+	return out
 }
 
 // root is FindRoot, remembering the answer for every directory on the

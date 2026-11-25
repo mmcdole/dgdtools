@@ -143,6 +143,46 @@ func (s *Session) Project(path string) (*config.Project, error) {
 	return s.ws.Project(path)
 }
 
+// LibPath returns the path the tools know the file or directory at path
+// (absolute) by. It is path itself, unless path is in a directory outside
+// any lib that a lib has a link to, named by its real path (as an editor
+// that resolves links names it): then it is the path through the link,
+// which is what the driver sees (config.Project.LibPath). The libs asked
+// are those of the projects of dirs (an editor's workspace folders) and
+// those of the projects resolved so far.
+func (s *Session) LibPath(path string, dirs ...string) string {
+	path = filepath.Clean(path)
+	var prjs []*config.Project
+	for _, d := range dirs {
+		if prj, err := s.ws.Project(d); err == nil {
+			prjs = append(prjs, prj)
+		}
+	}
+	prjs = append(prjs, s.ws.Projects()...)
+	// A file of a lib by its own name is that, and no lib's links need
+	// be looked for.
+	if slices.ContainsFunc(prjs, func(prj *config.Project) bool { return inLib(prj, path) }) {
+		return path
+	}
+	for _, prj := range prjs {
+		if p, ok := prj.LibPath(path); ok {
+			// A directory with a lib of its own is that lib's,
+			// whoever links to it.
+			if own, err := s.ws.Project(path); err == nil && inLib(own, path) {
+				return path
+			}
+			return p
+		}
+	}
+	return path
+}
+
+// inLib reports whether path is in prj's lib on disk.
+func inLib(prj *config.Project, path string) bool {
+	_, in := prj.Tree().Rel(path)
+	return in && prj.HasLib()
+}
+
 // Linter returns the linter of the project the file at path (absolute)
 // belongs to. It lives as long as its project: until a change to the
 // project's configuration replaces both.

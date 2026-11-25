@@ -160,6 +160,15 @@ form; `lsptest` runs a rich and a plain client over every feature.
   again when that set changes. Every event goes to `DiskChanged`, a
   directory as the directory; the open documents in `Affected.Files` (all
   of them on `Affected.All`) are linted again.
+- **A linked folder by its real path.** An editor that resolves links
+  (Eglot) names a file of a folder linked into the lib by its real path.
+  Every URI that comes in (`didOpen`, watched files, file moves) goes
+  through `Session.LibPath`, which maps a real path under a link's target
+  to the path through the link (`Project.Links`, found by one walk of
+  the lib per project, of the workspace folders' projects and those
+  resolved); the tools see the lib path only. What goes out names a file
+  by the URI of its open document, the client's own, and by its lib path
+  when it is not open. A real path no lib links to is the file it is.
 - **A client without dynamic registration** of watched files is not asked,
   and the server then sees the buffers and nothing else that changes on
   disk (a `git pull`, `dgdtools rename --write`), as gopls does in the
