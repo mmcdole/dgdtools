@@ -17,10 +17,13 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.25"
-      # The editor tests need Neovim, as in ci.yml (Vim is on the image).
+      # The editor tests need Neovim and Emacs, as in ci.yml (Vim is on
+      # the image).
       - run: |
           curl -fsSL https://github.com/neovim/neovim/releases/download/stable/nvim-linux-x86_64.tar.gz | tar -xz -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/nvim-linux-x86_64/bin" >> "$GITHUB_PATH"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends emacs-nox
       - run: go test -race ./...
       - uses: goreleaser/goreleaser-action@v7
         with:

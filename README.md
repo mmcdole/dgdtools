@@ -1,6 +1,6 @@
 # dgdtools
 
-CLI tooling and a language server for the [DGD](https://github.com/dworkin/dgd) dialect of LPC, with editor clients for VS Code and Vim/Neovim.
+CLI tooling and a language server for the [DGD](https://github.com/dworkin/dgd) dialect of LPC, with editor clients for VS Code, Vim/Neovim, and Emacs.
 
 Built on a native DGD 1.7 parser rather than adapted from LDMud or FluffOS, `dgdtools` ships as a single binary where the CLI and editor share the same `dgdtools.yml` configuration.
 
@@ -25,6 +25,7 @@ See the **[CLI Guide](docs/cli.md)**, **[Configuration & Profiles](docs/configur
 |---|---|
 | **[VS Code](editors/vscode/README.md)** | Marketplace extension with syntax highlighting and bundled `dgdtools` binary |
 | **[Vim & Neovim](editors/vim/README.md)** | Syntax, indent, filetype detection, and auto-LSP for Neovim 0.11+ |
+| **[Emacs](editors/emacs/README.md)** | `dgdlpc-mode` with highlighting, indent, and scoped detection, registered with Eglot |
 
 See **[Editor Support & LSP](editors/README.md)** for full server capabilities and generic LSP client setup.
 
@@ -102,7 +103,7 @@ See [dgdtools.example.yml](dgdtools.example.yml) and [examples/viking/dgdtools.y
 | [Configuration & Profiles](docs/configuration.md) | `dgdtools.yml` reference, per-directory scopes, `.editorconfig`, and mudlib profiles |
 | [Lint Rules](docs/rules.md) | Complete reference of all lint rules, codes, defaults, and options |
 | [Editor Support & LSP](editors/README.md) | `dgdtools lsp` features, editor setup overview, VSIX builds, and grammar tests |
-| [VS Code](editors/vscode/README.md) · [Vim / Neovim](editors/vim/README.md) | Per-editor installation and configuration |
+| [VS Code](editors/vscode/README.md) · [Vim / Neovim](editors/vim/README.md) · [Emacs](editors/emacs/README.md) | Per-editor installation and configuration |
 | [Design Docs](docs/design/architecture.md) | Architecture ([architecture.md](docs/design/architecture.md), [config.md](docs/design/config.md), [formatter.md](docs/design/formatter.md), [lsp.md](docs/design/lsp.md)) |
 
 ## License Note

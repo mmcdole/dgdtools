@@ -1,0 +1,249 @@
+>/*
+#^^ font-lock-comment-delimiter-face
+> * An object the way the formatter leaves one: this file is a fixed
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+> * point of `dgdtools format`, and what the Vim indent script must
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+> * reproduce from the same lines with their indentation taken away.
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+> */
+#^^^ font-lock-comment-delimiter-face
+>#include <std.h>
+#^^^^^^^^ font-lock-preprocessor-face
+#         ^^^^^^^ font-lock-string-face
+>
+>inherit room "/std/room";
+#^^^^^^^ font-lock-keyword-face
+#        ^^^^ font-lock-constant-face
+#             ^^^^^^^^^^^ font-lock-string-face
+>
+>#define DOOR_KEY "brass key"
+#^^^^^^^ font-lock-preprocessor-face
+#        ^^^^^^^^ font-lock-variable-name-face
+#                 ^^^^^^^^^^^ font-lock-string-face
+>
+>private static mapping exits;
+#^^^^^^^ font-lock-keyword-face
+#        ^^^^^^ font-lock-keyword-face
+#               ^^^^^^^ font-lock-type-face
+>private int *counts;
+#^^^^^^^ font-lock-keyword-face
+#        ^^^ font-lock-type-face
+>
+>static void
+#^^^^^^ font-lock-keyword-face
+#       ^^^^ font-lock-type-face
+>create()
+#^^^^^^ font-lock-function-name-face
+>{
+>    room::create();
+#    ^^^^ font-lock-constant-face
+#        ^^ font-lock-operator-face
+#          ^^^^^^ font-lock-function-call-face
+>    exits = ([
+#            ^^ font-lock-bracket-face
+>        "north": "/room/hall",
+#        ^^^^^^^ font-lock-string-face
+#                 ^^^^^^^^^^^^ font-lock-string-face
+>        "south": "/room/yard",
+#        ^^^^^^^ font-lock-string-face
+#                 ^^^^^^^^^^^^ font-lock-string-face
+>        "up": ([
+#        ^^^^ font-lock-string-face
+#              ^^ font-lock-bracket-face
+>            "dest": "/room/attic",
+#            ^^^^^^ font-lock-string-face
+#                    ^^^^^^^^^^^^^ font-lock-string-face
+>            "key": DOOR_KEY,
+#            ^^^^^ font-lock-string-face
+>        ]),
+#        ^^ font-lock-bracket-face
+>    ]);
+#    ^^ font-lock-bracket-face
+>    counts = ({
+#             ^^ font-lock-bracket-face
+>        1,
+#        ^ font-lock-number-face
+>        2,
+#        ^ font-lock-number-face
+>        3,
+#        ^ font-lock-number-face
+>    });
+#    ^^ font-lock-bracket-face
+>    set_dirs(({
+#    ^^^^^^^^ font-lock-function-call-face
+#             ^^ font-lock-bracket-face
+>        "north",
+#        ^^^^^^^ font-lock-string-face
+>        "south",
+#        ^^^^^^^ font-lock-string-face
+>    }), ([
+#    ^^ font-lock-bracket-face
+#        ^^ font-lock-bracket-face
+>        "north": 1,
+#        ^^^^^^^ font-lock-string-face
+#                 ^ font-lock-number-face
+>    ]));
+#    ^^ font-lock-bracket-face
+>    set_items(({
+#    ^^^^^^^^^ font-lock-function-call-face
+#              ^^ font-lock-bracket-face
+>        ([
+#        ^^ font-lock-bracket-face
+>            "name": "door",
+#            ^^^^^^ font-lock-string-face
+#                    ^^^^^^ font-lock-string-face
+>            "ids": ({
+#            ^^^^^ font-lock-string-face
+#                   ^^ font-lock-bracket-face
+>                "door",
+#                ^^^^^^ font-lock-string-face
+>                "brass door",
+#                ^^^^^^^^^^^^ font-lock-string-face
+>            }),
+#            ^^ font-lock-bracket-face
+>        ]),
+#        ^^ font-lock-bracket-face
+>    }));
+#    ^^ font-lock-bracket-face
+>    set_smells(({ "dust", "old wood",
+#    ^^^^^^^^^^ font-lock-function-call-face
+#               ^^ font-lock-bracket-face
+#                  ^^^^^^ font-lock-string-face
+#                          ^^^^^^^^^^ font-lock-string-face
+>        "brass polish" }));
+#        ^^^^^^^^^^^^^^ font-lock-string-face
+#                       ^^ font-lock-bracket-face
+>    set_short("a sample room");
+#    ^^^^^^^^^ font-lock-function-call-face
+#              ^^^^^^^^^^^^^^^ font-lock-string-face
+>    set_long("A room with two exits, " +
+#    ^^^^^^^^ font-lock-function-call-face
+#             ^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+>        "described over two lines.\n");
+#        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+>}
+>
+>/*
+#^^ font-lock-comment-delimiter-face
+> * A comment of several lines
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+> * before a function.
+#^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+> */
+#^^^ font-lock-comment-delimiter-face
+>int
+#^^^ font-lock-type-face
+>query_count(int which, varargs int fallback)
+#^^^^^^^^^^^ font-lock-function-name-face
+#            ^^^ font-lock-type-face
+#                       ^^^^^^^ font-lock-keyword-face
+#                               ^^^ font-lock-type-face
+>{
+>    int i, total;
+#    ^^^ font-lock-type-face
+>
+>    if (which < 0 || which >= sizeof(counts)) {
+#    ^^ font-lock-keyword-face
+#                ^ font-lock-number-face
+#                              ^^^^^^ font-lock-function-call-face
+>        return fallback;
+#        ^^^^^^ font-lock-keyword-face
+>    }
+>    for (i = 0; i < which; i++) {
+#    ^^^ font-lock-keyword-face
+#             ^ font-lock-number-face
+>        total += counts[i];
+>    }
+>    if (total > 10)
+#    ^^ font-lock-keyword-face
+#                ^^ font-lock-number-face
+>        total = 10;
+#                ^^ font-lock-number-face
+>    else if (total < 0 &&
+#    ^^^^ font-lock-keyword-face
+#         ^^ font-lock-keyword-face
+#                     ^ font-lock-number-face
+>        which > 1) {
+#                ^ font-lock-number-face
+>        return 0;
+#        ^^^^^^ font-lock-keyword-face
+#               ^ font-lock-number-face
+>    } else
+#      ^^^^ font-lock-keyword-face
+>        total++;
+>    while (total > 5) {
+#    ^^^^^ font-lock-keyword-face
+#                   ^ font-lock-number-face
+>        total--;
+>    }
+>    do {
+#    ^^ font-lock-keyword-face
+>        total++;
+>    } while (total < 3);
+#      ^^^^^ font-lock-keyword-face
+#                     ^ font-lock-number-face
+>    switch (which) {
+#    ^^^^^^ font-lock-keyword-face
+>    case 0:
+#    ^^^^ font-lock-keyword-face
+#         ^ font-lock-number-face
+>        total = 0;
+#                ^ font-lock-number-face
+>        break;
+#        ^^^^^ font-lock-keyword-face
+>    case 1..2:
+#    ^^^^ font-lock-keyword-face
+#         ^ font-lock-number-face
+#          ^^ font-lock-operator-face
+#            ^ font-lock-number-face
+>        total = call_other(this_object(), "query_bonus",
+#                ^^^^^^^^^^ font-lock-function-call-face
+#                           ^^^^^^^^^^^ font-lock-function-call-face
+#                                          ^^^^^^^^^^^^^ font-lock-string-face
+>            which, total);
+>        break;
+#        ^^^^^ font-lock-keyword-face
+>    default:
+#    ^^^^^^^ font-lock-keyword-face
+>        break;
+#        ^^^^^ font-lock-keyword-face
+>    }
+>#ifdef DEBUG
+#^^^^^^ font-lock-preprocessor-face
+>    write("total: " + total + "\n");
+#    ^^^^^ font-lock-function-call-face
+#          ^^^^^^^^^ font-lock-string-face
+#                              ^^^^ font-lock-string-face
+>#endif
+#^^^^^^ font-lock-preprocessor-face
+>    return total;
+#    ^^^^^^ font-lock-keyword-face
+>}
+>
+>string
+#^^^^^^ font-lock-type-face
+>query_exit(string dir)
+#^^^^^^^^^^ font-lock-function-name-face
+#           ^^^^^^ font-lock-type-face
+>{
+>    string dest;
+#    ^^^^^^ font-lock-type-face
+>
+>    dest = exits[dir];
+>    if (!dest) {
+#    ^^ font-lock-keyword-face
+>        // nothing that way
+#        ^^^ font-lock-comment-delimiter-face
+#           ^^^^^^^^^^^^^^^^ font-lock-comment-face
+>        return nil;
+#        ^^^^^^ font-lock-keyword-face
+#               ^^^ font-lock-constant-face
+>    }
+>    return catch (dest->load()) ? nil : dest;
+#    ^^^^^^ font-lock-keyword-face
+#           ^^^^^ font-lock-keyword-face
+#                      ^^ font-lock-operator-face
+#                        ^^^^ font-lock-function-call-face
+#                                  ^^^ font-lock-constant-face
+>}

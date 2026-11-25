@@ -18,14 +18,18 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.25"
-      # The editor tests (go test ./editors) need Neovim 0.11 or later,
-      # and fail without it where CI is set. Vim is on both images.
+      # The editor tests (go test ./editors) need Neovim 0.11 or later
+      # and Emacs 29.1 or later, and fail without them where CI is set.
+      # Vim is on both images. Ubuntu's Emacs is the oldest the mode
+      # supports (29), Homebrew's the newest.
       - if: runner.os == 'Linux'
         run: |
           curl -fsSL https://github.com/neovim/neovim/releases/download/stable/nvim-linux-x86_64.tar.gz | tar -xz -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/nvim-linux-x86_64/bin" >> "$GITHUB_PATH"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends emacs-nox
       - if: runner.os == 'macOS'
-        run: brew install neovim
+        run: brew install neovim emacs
       - run: go vet ./...
       - run: go test -race ./...
       - run: go build ./...

@@ -5,12 +5,13 @@
 1. **Syntax grammars** that work offline without a running server, matching `dgdtools`'s own lexer tokens.
 2. **The language server (`dgdtools lsp`)**, which adds diagnostics, quick fixes, formatting, navigation, completion, refactoring, and semantic highlighting.
 
-The language ID / filetype is **`dgdlpc`** everywhere (VS Code, Vim/Neovim). This avoids conflicting with existing `lpc` plugins built for LDMud or FluffOS, which highlight keywords DGD doesn't have and miss DGD keywords like `nil`, `atomic`, and `rlimits`.
+The language ID / filetype is **`dgdlpc`** everywhere (VS Code, Vim/Neovim, and Emacs's `dgdlpc-mode`). This avoids conflicting with existing `lpc` plugins built for LDMud or FluffOS, which highlight keywords DGD doesn't have and miss DGD keywords like `nil`, `atomic`, and `rlimits`.
 
 | Editor | Status |
 |---|---|
 | [VS Code](vscode/README.md) | Extension with TextMate grammar, language config, and bundled `dgdtools` LSP server |
 | [Vim & Neovim](vim/README.md) | Plugin with filetype detection, syntax, ftplugin, indent, and built-in LSP setup for Neovim 0.11+ |
+| [Emacs](emacs/README.md) | `dgdlpc-mode` with detection, highlighting, and indentation, registered with Eglot (Emacs 29+) |
 | Other LSP editors | Run `dgdtools lsp` over stdio for language `dgdlpc`, using `dgdtools.yml` / `.dgdtools.yml` as root markers |
 
 Shared grammar word lists (`dgdlpc.json`) and snapshot test fixtures live in `common/`.
@@ -21,6 +22,7 @@ None of the editor integrations claim `*.c` or `*.h` globally, so C projects on 
 
 - **VS Code:** Opt-in per folder via workspace `files.associations` (the extension offers a command and prompt when `dgdtools.yml` is present).
 - **Vim / Neovim:** Activated only under directories containing `dgdtools.yml` / `.dgdtools.yml`, or directories listed in `g:dgdlpc_roots`.
+- **Emacs:** The same rule, from `magic-mode-alist`, with `dgdlpc-roots` for the listed directories.
 
 ## The language server (`dgdtools lsp`)
 
@@ -92,11 +94,12 @@ Run `npm run check` for TypeScript typechecking, `npm test` for extension unit t
 
 ## Testing and updating grammars
 
-Run `go test ./editors` to test both the TextMate and Vim grammars:
+Run `go test ./editors` to test the TextMate grammar, the Vim syntax, and the Emacs mode:
 
-- `common/dgdlpc.json` is generated from `pkg/token`, `pkg/lexer`, and `pkg/pp`; tests verify both grammars stay in sync with every keyword and directive.
+- `common/dgdlpc.json` is generated from `pkg/token`, `pkg/lexer`, and `pkg/pp`; tests verify every grammar stays in sync with every keyword and directive.
 - The TextMate grammar is evaluated against `common/samples/` and compared byte-for-byte against the Go lexer and `*.tm.snap` snapshots. Patterns are restricted to the regex subset shared by Go's `regexp` and Oniguruma (plus trailing lookaheads).
 - When `vim` or `nvim` is on `PATH`, tests run Vim/Neovim directly to verify filetype detection, options, syntax groups (`*.vim.snap`), indentation (matching `dgdtools format`), and Neovim 0.11+ LSP integration.
+- When `emacs` (29.1+) is on `PATH`, tests byte-compile `dgdlpc-mode`, run its ERT tests (detection, comments, indentation, Eglot registration, autoloads), compare its faces with the lexer and `*.emacs.snap`, and run an Eglot session against the server.
 
 After intentional grammar changes, regenerate snapshots and review the diff:
 

@@ -1,0 +1,18 @@
+>/*
+#^^ font-lock-comment-delimiter-face
+> * Tokens the lexer has that only a macro body can hold: outside a
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+> * directive they are tokens still, and no valid file has them.
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+> */
+#^^^ font-lock-comment-delimiter-face
+>static void
+#^^^^^^ font-lock-keyword-face
+#       ^^^^ font-lock-type-face
+>stray()
+#^^^^^ font-lock-function-name-face
+>{
+>    a . b;
+>    a # b;
+>    a ## b;
+>}

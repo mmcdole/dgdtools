@@ -1,0 +1,288 @@
+>/*
+#^^ font-lock-comment-delimiter-face
+> * The tokens of DGD LPC, one class at a time: a sample for the grammar
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+> * tests under editors/, not an object anybody should compile.
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+> */
+#^^^ font-lock-comment-delimiter-face
+>
+>inherit "/lib/base";
+#^^^^^^^ font-lock-keyword-face
+#        ^^^^^^^^^^^ font-lock-string-face
+>inherit room "/std/room";
+#^^^^^^^ font-lock-keyword-face
+#        ^^^^ font-lock-constant-face
+#             ^^^^^^^^^^^ font-lock-string-face
+>private inherit util UTIL_PATH;
+#^^^^^^^ font-lock-keyword-face
+#        ^^^^^^^ font-lock-keyword-face
+#                ^^^^ font-lock-constant-face
+>
+>// A line comment (dialect.slash_slash) ends with its line, whatever \
+#^^^ font-lock-comment-delimiter-face
+#   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+>static int after_the_comment;
+#^^^^^^ font-lock-keyword-face
+#       ^^^ font-lock-type-face
+>
+>/* A block comment keeps "this" and // this and 'x' and #if to itself,
+#^^^ font-lock-comment-delimiter-face
+#   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+>   over as many lines as it takes. */
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+#                                  ^^^ font-lock-comment-delimiter-face
+>
+>private static mapping exits;
+#^^^^^^^ font-lock-keyword-face
+#        ^^^^^^ font-lock-keyword-face
+#               ^^^^^^^ font-lock-type-face
+>static nomask atomic varargs mixed *table;
+#^^^^^^ font-lock-keyword-face
+#       ^^^^^^ font-lock-keyword-face
+#              ^^^^^^ font-lock-keyword-face
+#                     ^^^^^^^ font-lock-keyword-face
+#                             ^^^^^ font-lock-type-face
+>object owner; float weight; string name; int count;
+#^^^^^^ font-lock-type-face
+#              ^^^^^ font-lock-type-face
+#                            ^^^^^^ font-lock-type-face
+#                                         ^^^ font-lock-type-face
+>
+>static mixed
+#^^^^^^ font-lock-keyword-face
+#       ^^^^^ font-lock-type-face
+>literals(string str, int *arr)
+#^^^^^^^^ font-lock-function-name-face
+#         ^^^^^^ font-lock-type-face
+#                     ^^^ font-lock-type-face
+>{
+>    float f;
+#    ^^^^^ font-lock-type-face
+>    int i;
+#    ^^^ font-lock-type-face
+>
+>    f = 1.0 + 1. + .5 + 1e10 + 1.5e-3 + 2E+4 + 0.25;
+#        ^^^ font-lock-number-face
+#              ^^ font-lock-number-face
+#                   ^^ font-lock-number-face
+#                        ^^^^ font-lock-number-face
+#                               ^^^^^^ font-lock-number-face
+#                                        ^^^^ font-lock-number-face
+#                                               ^^^^ font-lock-number-face
+>    i = 0 + 7 + 42 + 0x1f + 0XFF + 017;
+#        ^ font-lock-number-face
+#            ^ font-lock-number-face
+#                ^^ font-lock-number-face
+#                     ^^^^ font-lock-number-face
+#                            ^^^^ font-lock-number-face
+#                                   ^^^ font-lock-number-face
+>    i = 'a' + '\n' + '\'' + '\\' + '\101' + '\x41' + '"' + '/';
+#        ^^^ font-lock-string-face
+#              ^^^^ font-lock-string-face
+#                     ^^^^ font-lock-string-face
+#                            ^^^^ font-lock-string-face
+#                                   ^^^^^^ font-lock-string-face
+#                                            ^^^^^^ font-lock-string-face
+#                                                     ^^^ font-lock-string-face
+#                                                           ^^^ font-lock-string-face
+>    str = "plain" + "esc \n \t \" \\ \101 \x41 \q" + "" + "/* no comment */";
+#          ^^^^^^^ font-lock-string-face
+#                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+#                                                     ^^ font-lock-string-face
+#                                                          ^^^^^^^^^^^^^^^^^^ font-lock-string-face
+>    str = "continued \
+#          ^^^^^^^^^^^^ font-lock-string-face
+>on the next line" + "// no comment";
+#^^^^^^^^^^^^^^^^^ font-lock-string-face
+#                    ^^^^^^^^^^^^^^^ font-lock-string-face
+>    arr = arr[1..2] + arr[..3] + arr[i..] + arr[0 .. 1] + arr[i + 1 ..];
+#              ^ font-lock-number-face
+#               ^^ font-lock-operator-face
+#                 ^ font-lock-number-face
+#                          ^^ font-lock-operator-face
+#                            ^ font-lock-number-face
+#                                      ^^ font-lock-operator-face
+#                                                ^ font-lock-number-face
+#                                                  ^^ font-lock-operator-face
+#                                                     ^ font-lock-number-face
+#                                                                  ^ font-lock-number-face
+#                                                                    ^^ font-lock-operator-face
+>    return ({ str, f, i, nil, ([ "a": 1, "b": ({ 2, 3 }), arr[0]: arr[1] ]) });
+#    ^^^^^^ font-lock-keyword-face
+#           ^^ font-lock-bracket-face
+#                         ^^^ font-lock-constant-face
+#                              ^^ font-lock-bracket-face
+#                                 ^^^ font-lock-string-face
+#                                      ^ font-lock-number-face
+#                                         ^^^ font-lock-string-face
+#                                              ^^ font-lock-bracket-face
+#                                                 ^ font-lock-number-face
+#                                                    ^ font-lock-number-face
+#                                                      ^^ font-lock-bracket-face
+#                                                              ^ font-lock-number-face
+#                                                                      ^ font-lock-number-face
+#                                                                         ^^ font-lock-bracket-face
+#                                                                            ^^ font-lock-bracket-face
+>}
+>
+>static int
+#^^^^^^ font-lock-keyword-face
+#       ^^^ font-lock-type-face
+>operators(int a, int b, object ob, mixed args...)
+#^^^^^^^^^ font-lock-function-name-face
+#          ^^^ font-lock-type-face
+#                 ^^^ font-lock-type-face
+#                        ^^^^^^ font-lock-type-face
+#                                   ^^^^^ font-lock-type-face
+#                                             ^^^ font-lock-operator-face
+>{
+>    a = b; a += b; a -= b; a *= b; a /= b; a %= b;
+>    a &= b; a |= b; a ^= b; a <<= b; a >>= b;
+>    a = a + b - a * b / a % b;
+>    a = a & b | a ^ ~b;
+>    a = a << 2 >> 1;
+#             ^ font-lock-number-face
+#                  ^ font-lock-number-face
+>    a = a == b || a != b && a < b || a > b && a <= b || a >= b || !a;
+>    a++; b--; ++a; --b;
+>    a = a ? b : -a;
+>    a = ob <- "/std/room";
+#           ^^ font-lock-operator-face
+#              ^^^^^^^^^^^ font-lock-string-face
+>    ob->call(a, b, args...);
+#      ^^ font-lock-operator-face
+#        ^^^^ font-lock-function-call-face
+#                       ^^^ font-lock-operator-face
+>    ob = new object "/data/thing";
+#         ^^^ font-lock-keyword-face
+#             ^^^^^^ font-lock-type-face
+#                    ^^^^^^^^^^^^^ font-lock-string-face
+>    room::create();
+#    ^^^^ font-lock-constant-face
+#        ^^ font-lock-operator-face
+#          ^^^^^^ font-lock-function-call-face
+>    ::create();
+#    ^^ font-lock-operator-face
+#      ^^^^^^ font-lock-function-call-face
+>    return f(a[i]) + g(([ ]), ({ }), ([ a: b[0] ])[a]) + sizeof(({ a, b }));
+#    ^^^^^^ font-lock-keyword-face
+#           ^ font-lock-function-call-face
+#                     ^ font-lock-function-call-face
+#                       ^^ font-lock-bracket-face
+#                          ^^ font-lock-bracket-face
+#                              ^^ font-lock-bracket-face
+#                                 ^^ font-lock-bracket-face
+#                                     ^^ font-lock-bracket-face
+#                                             ^ font-lock-number-face
+#                                                ^^ font-lock-bracket-face
+#                                                         ^^^^^^ font-lock-function-call-face
+#                                                                ^^ font-lock-bracket-face
+#                                                                        ^^ font-lock-bracket-face
+>}
+>
+>static void
+#^^^^^^ font-lock-keyword-face
+#       ^^^^ font-lock-type-face
+>keywords(int n, string function)
+#^^^^^^^^ font-lock-function-name-face
+#         ^^^ font-lock-type-face
+#                ^^^^^^ font-lock-type-face
+>{
+>    int i;
+#    ^^^ font-lock-type-face
+>
+>    if (n)
+#    ^^ font-lock-keyword-face
+>        n = 1;
+#            ^ font-lock-number-face
+>    else if (!n) {
+#    ^^^^ font-lock-keyword-face
+#         ^^ font-lock-keyword-face
+>        n = 2;
+#            ^ font-lock-number-face
+>    } else
+#      ^^^^ font-lock-keyword-face
+>        return;
+#        ^^^^^^ font-lock-keyword-face
+>    for (i = 0; i < n; i++)
+#    ^^^ font-lock-keyword-face
+#             ^ font-lock-number-face
+>        continue;
+#        ^^^^^^^^ font-lock-keyword-face
+>    while (n--)
+#    ^^^^^ font-lock-keyword-face
+>        break;
+#        ^^^^^ font-lock-keyword-face
+>    do {
+#    ^^ font-lock-keyword-face
+>        n++;
+>    } while (n < 10);
+#      ^^^^^ font-lock-keyword-face
+#                 ^^ font-lock-number-face
+>    switch (n) {
+#    ^^^^^^ font-lock-keyword-face
+>    case 1:
+#    ^^^^ font-lock-keyword-face
+#         ^ font-lock-number-face
+>    case 2..3:
+#    ^^^^ font-lock-keyword-face
+#         ^ font-lock-number-face
+#          ^^ font-lock-operator-face
+#            ^ font-lock-number-face
+>        break;
+#        ^^^^^ font-lock-keyword-face
+>    case 'a':
+#    ^^^^ font-lock-keyword-face
+#         ^^^ font-lock-string-face
+>        goto out;
+#        ^^^^ font-lock-keyword-face
+>    default:
+#    ^^^^^^^ font-lock-keyword-face
+>        return;
+#        ^^^^^^ font-lock-keyword-face
+>    }
+>    catch {
+#    ^^^^^ font-lock-keyword-face
+>        n = 1 / 0;
+#            ^ font-lock-number-face
+#                ^ font-lock-number-face
+>    } : {
+>        n = 0;
+#            ^ font-lock-number-face
+>    }
+>    try {
+#    ^^^ font-lock-keyword-face
+>        n = 1;
+#            ^ font-lock-number-face
+>    } catch (err) {
+#      ^^^^^ font-lock-keyword-face
+>        n = 2;
+#            ^ font-lock-number-face
+>    }
+>    rlimits (10; 1000) {
+#    ^^^^^^^ font-lock-keyword-face
+#             ^^ font-lock-number-face
+#                 ^^^^ font-lock-number-face
+>        function = catch(call_other(this_object(), function, n));
+#                   ^^^^^ font-lock-keyword-face
+#                         ^^^^^^^^^^ font-lock-function-call-face
+#                                    ^^^^^^^^^^^ font-lock-function-call-face
+>    }
+>out:
+>    NAME = MAX_COUNT + __DGD__ + _x + X + T1;
+>    n = count + \
+>        1;
+#        ^ font-lock-number-face
+>}
+>
+>static int
+#^^^^^^ font-lock-keyword-face
+#       ^^^ font-lock-type-face
+>operator+ (int n)
+#^^^^^^^^ font-lock-keyword-face
+#           ^^^ font-lock-type-face
+>{
+>    return count + n;
+#    ^^^^^^ font-lock-keyword-face
+>}

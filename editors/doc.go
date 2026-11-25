@@ -2,8 +2,10 @@
 // Code extension (vscode/: the TextMate grammar, the language
 // configuration, and the client of the language server, in TypeScript),
 // the Vim and Neovim plugin (vim/: the runtime files, and Neovim's
-// entry for the language server), and what the grammars share
-// (common/): the word list and the sample files.
+// entry for the language server), the Emacs major mode (emacs/:
+// dgdlpc-mode.el, which registers the server with Eglot, and its ERT
+// tests), and what the grammars share (common/): the word list and the
+// sample files.
 //
 // There is no Go code here to import. The package exists for its tests,
 // which keep the grammars from drifting away from the tool:
@@ -18,6 +20,12 @@
 //   - the Vim files are run by the vim and nvim on PATH, when there are
 //     any: filetype detection, the syntax groups of the samples (same
 //     comparison, same kind of snapshot), and indentation;
+//   - the Emacs mode is run by the emacs on PATH, when it is 29.1 or
+//     later: it byte-compiles without a warning, its ERT tests pass
+//     (detection, comments, the dialect, indentation against the
+//     formatter, Eglot, the autoloads), its faces of the samples are
+//     compared with pkg/lexer's tokens and a snapshot, and an Eglot
+//     session has the server built from the tree lint and format;
 //   - the language server is run under the nvim on PATH, when it is one
 //     with vim.lsp.config (0.11 and later): the command is built, and
 //     editor sessions have it lint, fix, format, navigate and rename,

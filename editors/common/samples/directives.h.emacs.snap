@@ -1,0 +1,133 @@
+>/*
+#^^ font-lock-comment-delimiter-face
+> * Preprocessor directives: '#' first on its line, to the end of the
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+> * logical line.
+#^^^^^^^^^^^^^^^^ font-lock-comment-face
+> */
+#^^^ font-lock-comment-delimiter-face
+>#ifndef SAMPLE_H
+#^^^^^^^ font-lock-preprocessor-face
+># define SAMPLE_H
+#^^^^^^^^ font-lock-preprocessor-face
+#         ^^^^^^^^ font-lock-variable-name-face
+>
+>#include <std.h>
+#^^^^^^^^ font-lock-preprocessor-face
+#         ^^^^^^^ font-lock-string-face
+># include "local.h"	/* a comment after it */
+#^^^^^^^^^ font-lock-preprocessor-face
+#          ^^^^^^^^^ font-lock-string-face
+#                   	^^^ font-lock-comment-delimiter-face
+#                   	   ^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+#                   	                     ^^^ font-lock-comment-delimiter-face
+>#include "/include/config.h" // and a line comment
+#^^^^^^^^ font-lock-preprocessor-face
+#         ^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+#                             ^^^ font-lock-comment-delimiter-face
+#                                ^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+>#include SAMPLE_PATH
+#^^^^^^^^ font-lock-preprocessor-face
+>
+>#define LIMIT 10
+#^^^^^^^ font-lock-preprocessor-face
+#        ^^^^^ font-lock-variable-name-face
+#              ^^ font-lock-number-face
+>#define EMPTY
+#^^^^^^^ font-lock-preprocessor-face
+#        ^^^^^ font-lock-variable-name-face
+>#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#^^^^^^^ font-lock-preprocessor-face
+#        ^^^ font-lock-variable-name-face
+>#define STR(x) #x
+#^^^^^^^ font-lock-preprocessor-face
+#        ^^^ font-lock-variable-name-face
+>#define PASTE(a, b) a ## b
+#^^^^^^^ font-lock-preprocessor-face
+#        ^^^^^ font-lock-variable-name-face
+>#define DIRS ({ "north", "south" })
+#^^^^^^^ font-lock-preprocessor-face
+#        ^^^^ font-lock-variable-name-face
+#             ^^ font-lock-bracket-face
+#                ^^^^^^^ font-lock-string-face
+#                         ^^^^^^^ font-lock-string-face
+#                                 ^^ font-lock-bracket-face
+>#define EXITS ([ "north": "/room/hall", \
+#^^^^^^^ font-lock-preprocessor-face
+#        ^^^^^ font-lock-variable-name-face
+#              ^^ font-lock-bracket-face
+#                 ^^^^^^^ font-lock-string-face
+#                          ^^^^^^^^^^^^ font-lock-string-face
+>                 "south": DIRS[1] ])
+#                 ^^^^^^^ font-lock-string-face
+#                               ^ font-lock-number-face
+#                                  ^^ font-lock-bracket-face
+>#define LONG_TEXT "one line\n\
+#^^^^^^^ font-lock-preprocessor-face
+#        ^^^^^^^^^ font-lock-variable-name-face
+#                  ^^^^^^^^^^^^ font-lock-string-face
+>another line\n"
+#^^^^^^^^^^^^^^^ font-lock-string-face
+>#define OPEN ([
+#^^^^^^^ font-lock-preprocessor-face
+#        ^^^^ font-lock-variable-name-face
+#             ^^ font-lock-bracket-face
+>#define CLOSE ])
+#^^^^^^^ font-lock-preprocessor-face
+#        ^^^^^ font-lock-variable-name-face
+#              ^^ font-lock-bracket-face
+>#define MULTI(x) do { \
+#^^^^^^^ font-lock-preprocessor-face
+#        ^^^^^ font-lock-variable-name-face
+#                 ^^ font-lock-keyword-face
+>        x; /* a comment that
+#           ^^^ font-lock-comment-delimiter-face
+#              ^^^^^^^^^^^^^^ font-lock-comment-face
+>              goes on */ \
+#^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+#                     ^^^ font-lock-comment-delimiter-face
+>    } while (0)
+#      ^^^^^ font-lock-keyword-face
+#             ^ font-lock-number-face
+>
+>#if defined(__DGD__) && LIMIT > 0x10 || !defined(OTHER)
+#^^^ font-lock-preprocessor-face
+#    ^^^^^^^ font-lock-function-name-face
+#                                ^^^^ font-lock-number-face
+#                                         ^^^^^^^ font-lock-function-name-face
+># undef LIMIT
+#^^^^^^^ font-lock-preprocessor-face
+>#elif LIMIT == 3
+#^^^^^ font-lock-preprocessor-face
+#               ^ font-lock-number-face
+># line 100 "sample.h"
+#^^^^^^ font-lock-preprocessor-face
+#       ^^^ font-lock-number-face
+#           ^^^^^^^^^^ font-lock-string-face
+># pragma unconstrained_float
+#^^^^^^^^ font-lock-preprocessor-face
+>#else
+#^^^^^ font-lock-preprocessor-face
+># error this can't be right: "unbalanced
+#^^^^^^^ font-lock-preprocessor-face
+>#endif
+#^^^^^^ font-lock-preprocessor-face
+>
+>#ifdef OTHER
+#^^^^^^ font-lock-preprocessor-face
+>int after_a_directive;
+#^^^ font-lock-type-face
+>#endif
+#^^^^^^ font-lock-preprocessor-face
+>  #define INDENTED 1
+#  ^^^^^^^ font-lock-preprocessor-face
+#          ^^^^^^^^ font-lock-variable-name-face
+#                   ^ font-lock-number-face
+>#unknown directive
+>#
+>
+>#endif /* SAMPLE_H */
+#^^^^^^ font-lock-preprocessor-face
+#       ^^^ font-lock-comment-delimiter-face
+#          ^^^^^^^^ font-lock-comment-face
+#                  ^^^ font-lock-comment-delimiter-face

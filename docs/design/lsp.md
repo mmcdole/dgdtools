@@ -661,7 +661,7 @@ grammar's scopes for themes without semantic rules
 
 ## 11. Editor clients
 
-The language is `dgdlpc` everywhere (VS Code id, Vim filetype). `lpc` is taken in both ecosystems by tooling for other
+The language is `dgdlpc` everywhere (VS Code id, Vim filetype, Emacs `dgdlpc-mode`). `lpc` is taken in both ecosystems by tooling for other
 drivers, and a file handed to two grammars and two servers under one id
 is worse than a new word.
 
@@ -745,7 +745,7 @@ package without a binary for the rest.
   programs. A package per platform is delivered and updated by the
   marketplace like any other extension and works offline.
 
-### 11.3 Vim, Neovim, others
+### 11.3 Vim, Neovim, Emacs, others
 
 - **Vim and Neovim**: `editors/vim` is one plugin for both (Vim reads
   neither `lsp/` nor `plugin/*.lua`). For Neovim 0.11+,
@@ -756,7 +756,27 @@ package without a binary for the rest.
   has the lines for vim-lsp, ALE and coc.nvim, including how to pass the
   profile and lib path. Vim clients and Neovim on Linux usually do not
   watch files (section 4).
-- Helix, Emacs (eglot), Sublime (LSP), Kate: a line of configuration each,
+- **Emacs**: `editors/emacs/dgdlpc-mode.el`, a major mode for Emacs
+  29.1+ derived from `prog-mode`, not `c-mode`: a mode derived from
+  `c-mode` runs the user's C hooks (`eglot-ensure` with clangd, a C
+  style) on LPC files, matches Eglot's C entry and brings cc-mode's C
+  keywords; undoing that is a cc-mode language definition, more code
+  than the syntax table, word lists and indentation function a C-like
+  language needs. Detection is the Vim rule, asked from
+  `magic-mode-alist` (before `auto-mode-alist`, so no C hook runs
+  first), with `dgdlpc-roots`; remote files are left to C, as URL
+  buffers are in Vim, unless a remote directory is listed there (matched
+  as text, for highlighting and indentation only). The name test is in the autoloads, so the package
+  loads with the first `.c`/`.h` file. The server is added to
+  `eglot-server-programs` when Eglot loads (not before, and Eglot is
+  never loaded for it); it is started by the user's `eglot-ensure` in
+  `dgdlpc-mode-hook`, the Emacs norm. For Eglot only (`eglot-lsp-context`),
+  a buffer-local `project-find-functions` entry roots the project at the
+  nearest `dgdtools.yml` or `dgdlpc-roots` entry, as Neovim's root
+  markers do. Indentation is an indent function that counts brackets as
+  the formatter does, not cc-mode's engine. lsp-mode gets lines in the
+  README, not code.
+- Helix, Sublime (LSP), Kate: a line of configuration each,
   documented by the README for any client, not maintained.
 
 ## 12. Testing
@@ -789,7 +809,8 @@ package without a binary for the rest.
   `TestPanics`, `TestEndings`, `TestLatin1`, `TestDependents`,
   `TestWatchedFiles`, `TestSettings`. All under `-race`.
 - **Editors**: `TestNeovim*` in `editors` drive the `nvim` on `PATH`
-  through each feature; CI installs Neovim so they run there.
+  through each feature, and `TestEmacsEglot` drives Eglot in the
+  `emacs` on `PATH`; CI installs both so they run there.
 - **Corpus** (`-tags corpus`, `$DGDTOOLS_CONFIG`, the VikingMUD lib):
   `TestCorpusSession` opens 2,003 files (9 Latin-1), types a character
   into each and takes it out: what is published equals a whole-lib
