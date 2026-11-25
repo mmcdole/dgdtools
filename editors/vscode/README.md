@@ -1,7 +1,7 @@
-# DGD LPC (dgdtools)
+# LPC (DGD)
 
-Language support for the [DGD](https://github.com/dworkin/dgd) dialect of
-LPC, powered by the [dgdtools](https://github.com/mmcdole/dgdtools#readme)
+Language support for LPC as compiled by the [DGD](https://github.com/dworkin/dgd)
+driver, powered by the [dgdtools](https://github.com/mmcdole/dgdtools#readme)
 language server.
 
 ## Features
@@ -41,7 +41,7 @@ instead of guessing.
 
 ## Installation
 
-Install **DGD LPC (dgdtools)** from the Marketplace. Packages for
+Install **LPC (DGD)** from the Marketplace. Packages for
 macOS, Linux and Windows (x64 and arm64) include the `dgdtools` binary,
 so there's nothing else to install. On other platforms,
 [install dgdtools](https://github.com/mmcdole/dgdtools#installation)
@@ -55,7 +55,7 @@ the `.vsix` files, which can be installed with
 
 `.c` and `.h` files are C by default, so the extension only treats them
 as LPC in folders you choose. Open your mudlib and run
-**dgdtools: Use DGD LPC for This Folder's .c/.h Files** from the command
+**dgdtools: Use LPC (DGD) for This Folder's .c/.h Files** from the command
 palette or the Explorer context menu. If the folder has a `dgdtools.yml`,
 the extension offers to do this for you.
 
@@ -108,7 +108,7 @@ completion.
 
 | Command | Description |
 |---|---|
-| **dgdtools: Use DGD LPC for This Folder's .c/.h Files** | Associate the folder's `.c`/`.h` files with LPC |
+| **dgdtools: Use LPC (DGD) for This Folder's .c/.h Files** | Associate the folder's `.c`/`.h` files with LPC |
 | **dgdtools: Use C for This Folder's .c/.h Files** | Undo the association |
 | **dgdtools: Restart Server** | Restart the language server |
 

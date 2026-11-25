@@ -1,6 +1,6 @@
-# Editor support for DGD LPC
+# Editor support for LPC (DGD)
 
-What an editor needs to show DGD LPC. The language is called
+What an editor needs to show LPC (DGD). The language is called
 **`dgdlpc`** everywhere: the VS Code language id, the Vim filetype, the
 Helix language. (`lpc` is taken by tooling for other drivers, which
 colours as keywords words DGD does not have and knows none of `nil`,

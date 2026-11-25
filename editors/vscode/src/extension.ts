@@ -205,8 +205,8 @@ async function setAssociation(context: vscode.ExtensionContext, uri: vscode.Uri 
   if (nothing) {
     void vscode.window.showInformationMessage(
       on
-        ? `dgdtools: the *.c and *.h files of ${where.label} are DGD LPC already.`
-        : `dgdtools: the workspace settings do not say the *.c and *.h files of ${where.label} are DGD LPC.`,
+        ? `dgdtools: the *.c and *.h files of ${where.label} are LPC (DGD) already.`
+        : `dgdtools: the workspace settings do not say the *.c and *.h files of ${where.label} are LPC (DGD).`,
     );
     return;
   }
@@ -226,8 +226,8 @@ async function setAssociation(context: vscode.ExtensionContext, uri: vscode.Uri 
   }
   void vscode.window.showInformationMessage(
     on
-      ? `dgdtools: the *.c and *.h files of ${where.label} are DGD LPC now (files.associations in the workspace settings).`
-      : `dgdtools: the *.c and *.h files of ${where.label} are no longer DGD LPC (files.associations in the workspace settings).`,
+      ? `dgdtools: the *.c and *.h files of ${where.label} are LPC (DGD) now (files.associations in the workspace settings).`
+      : `dgdtools: the *.c and *.h files of ${where.label} are no longer LPC (DGD) (files.associations in the workspace settings).`,
   );
 }
 
@@ -303,7 +303,7 @@ async function offerAssociations(context: vscode.ExtensionContext): Promise<void
     const yes = 'Yes';
     const never = 'Never';
     const choice = await vscode.window.showInformationMessage(
-      `dgdtools: ${where.label} has a dgdtools.yml. Treat its *.c and *.h files as DGD LPC? This is written to the workspace settings (files.associations); everywhere else they stay C.`,
+      `dgdtools: ${where.label} has a dgdtools.yml. Treat its *.c and *.h files as LPC (DGD)? This is written to the workspace settings (files.associations); everywhere else they stay C.`,
       yes,
       never,
     );

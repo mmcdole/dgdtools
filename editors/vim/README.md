@@ -1,4 +1,4 @@
-# DGD LPC for Vim and Neovim
+# LPC (DGD) for Vim and Neovim
 
 This directory is a plugin for both editors: the filetype `dgdlpc`
 (detection, syntax, filetype plugin, indent) and, in Neovim 0.11 and

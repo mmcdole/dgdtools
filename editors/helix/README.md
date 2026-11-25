@@ -1,4 +1,4 @@
-# DGD LPC for Helix
+# LPC (DGD) for Helix
 
 Helix highlights only through tree-sitter, and there is no tree-sitter
 grammar for DGD LPC yet ([lsp.md](../../docs/design/lsp.md), 10.1), so

@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "DGD LPC",
+  "name": "LPC (DGD)",
   "scopeName": "source.dgdlpc",
   "comment": "The lexical layer of DGD LPC, as pkg/lexer of dgdtools reads it. Tested by `go test ./editors`, which runs this file: every pattern stays inside the regular expression syntax Go and Oniguruma share, plus (?=...) at the end of a top-level alternative. No \\d \\w \\s, no $, no lookbehind, no backreferences; a line ends in \\n.",
   "patterns": [

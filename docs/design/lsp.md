@@ -693,7 +693,7 @@ Node's test runner.
   about.** `files.associations` in the workspace's settings, never the
   user's, with patterns that name the folder (the setting has window
   scope, so a nested or multi-root folder gets `**/DIR/**/*.c`). The
-  commands "Use DGD LPC for This Folder's .c/.h Files" and its inverse
+  commands "Use LPC (DGD) for This Folder's .c/.h Files" and its inverse
   write and remove exactly those keys, and list (or unlist) Microsoft's C
   extensions as unwanted recommendations in `.vscode/extensions.json`,
   per folder. On activation, for each outermost config directory not yet
