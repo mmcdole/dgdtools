@@ -166,9 +166,11 @@ func (pb *ProfileBuild) MinOwners() int {
 type DialectCfg struct {
 	SlashSlash *bool `yaml:"slash_slash"` // default true
 	Closures   bool  `yaml:"closures"`    // default false
-	// Typechecking is the driver's typechecking level (0, 1, 2). Rules
-	// that only hold under typechecking stay silent when it is unknown.
-	Typechecking *int `yaml:"typechecking"`
+	// Typechecking is the driver's typechecking level (0, 1, 2), read
+	// from driver_config or the profile, never written in dgdtools.yml.
+	// Rules that only hold under typechecking stay silent when it is
+	// unknown.
+	Typechecking *int `yaml:"-"`
 	// Kfuns are the kernel functions this driver has beyond stock DGD's,
 	// those of the extension modules it loads, each as a prototype
 	// ("int *rusage()"; kfun.Parse says how one is written). A kfun of

@@ -135,8 +135,8 @@ func TestRulesAndExplain(t *testing.T) {
 
 func TestConfigCommand(t *testing.T) {
 	dir := tree(t, map[string]string{
-		"dgdtools.yml":                 "root: lib\ndriver_config: mud.dgd\ndialect: {typechecking: 1}\nformat: {line_endings: lf}\nlint:\n  rules: {missing-visibility: warning}\n",
-		"mud.dgd":                      "include_dirs = ({ \"/include\" });\n",
+		"dgdtools.yml":                 "root: lib\ndriver_config: mud.dgd\nformat: {line_endings: lf}\nlint:\n  rules: {missing-visibility: warning}\n",
+		"mud.dgd":                      "include_dirs = ({ \"/include\" });\ntypechecking = 1;\n",
 		"lib/a.c":                      "",
 		"lib/.editorconfig":            "[*.c]\nindent_style = tab\n",
 		"lib/players/ann/dgdtools.yml": "root: false\nformat: {indent_width: 2}\nlint:\n  rules: {missing-visibility: off, unreachable-code: error}\n",

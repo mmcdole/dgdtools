@@ -51,6 +51,12 @@ func checkRemoved(data []byte) error {
 					return fail(k2, "profile_build.driver_config moved: use top-level driver_config")
 				}
 			}
+		case "dialect":
+			for k2 := range pairs(v) {
+				if k2.Value == "typechecking" {
+					return fail(k2, "dialect.typechecking removed: dgdtools reads typechecking from driver_config (a partial checkout gets it from its profile)")
+				}
+			}
 		case "conventions":
 			for k2, v2 := range pairs(v) {
 				switch k2.Value {

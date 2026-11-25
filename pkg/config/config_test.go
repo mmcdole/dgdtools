@@ -99,14 +99,14 @@ func TestDiscoverWalksUpFromThePath(t *testing.T) {
 // says of the dialect and the conventions is its own.
 func TestDriverConfigIsTheSource(t *testing.T) {
 	m := vfs.Mem{
-		"/mud/dgdtools.yml": "root: .\ndriver_config: mud.dgd\nconventions: {create: init}\ndialect: {typechecking: 2}\n",
+		"/mud/dgdtools.yml": "root: .\ndriver_config: mud.dgd\nconventions: {create: init}\n",
 		"/mud/mud.dgd":      driverCfg,
 		"/mud/a.c":          "",
 	}
 	prj, err := Discover(m, []string{"/mud/a.c"}, DiscoverOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"/dgd/include", "/std/include"}, prj.Config.IncludeDirs)
-	assert.Equal(t, 2, *prj.Config.Dialect.Typechecking)
+	assert.Equal(t, 1, *prj.Config.Dialect.Typechecking)
 	assert.Equal(t, "init", prj.Config.Create())
 	assert.Equal(t, "/dgd/include/Std.h", prj.Config.IncludeFile)
 	assert.Equal(t, []string{"/mud/dgdtools.yml", "/mud/mud.dgd"}, prj.Inputs())

@@ -140,7 +140,7 @@ func TestScopeValidation(t *testing.T) {
 		"format key":     {"format: {line_width: 80}\n", "line_width"},
 		"object paths":   {"relative_object_paths: cwd\n", `relative_object_paths: unknown value "cwd" (want root or file)`},
 		"macro class":    {"conventions:\n  macros: {FOREACH: statment}\n", `conventions.macros: FOREACH: unknown class "statment" (want expression, empty, specifier, type, string, statement, opaque)`},
-		"typechecking":   {"dialect: {typechecking: 3}\n", "dialect.typechecking: 3 is not a typechecking level"},
+		"typechecking":   {"dialect: {typechecking: 2}\n", "dialect.typechecking removed: dgdtools reads typechecking from driver_config"},
 		"kfun":           {"dialect:\n  kfuns: [\"int *rusage()\", \"rusage\"]\n", `dialect.kfuns: kfun prototype "rusage": want TYPE NAME(PARAMETERS)`},
 		"scope kfuns":    {"root: false\ndialect: {kfuns: [\"int f()\"]}\n", "dialect belongs"},
 		"registry index": {"conventions:\n  object_registry: {load: -1}\n", "conventions.object_registry: load: -1 is not an argument index"},
