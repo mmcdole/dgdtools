@@ -13,6 +13,7 @@ import (
 	"unique"
 
 	"github.com/mmcdole/dgdtools/internal/par"
+	"github.com/mmcdole/dgdtools/pkg/config"
 	"github.com/mmcdole/dgdtools/pkg/diag"
 	"github.com/mmcdole/dgdtools/pkg/lexer"
 	"github.com/mmcdole/dgdtools/pkg/pp"
@@ -368,6 +369,9 @@ type baseState struct {
 	layers []*pp.Table
 	// ok is true when the header and everything it includes was read.
 	ok bool
+	// unset says no include_file was given: what the driver forces into
+	// every file is unknown, which is all that makes ok false.
+	unset bool
 	// deps are the files read, absent the places an include was looked
 	// for and not found.
 	deps, absent []string
@@ -391,7 +395,7 @@ func (s *Snapshot) baseState() *baseState {
 			return &baseState{}
 		}
 		if inc == "" {
-			return &baseState{ok: true}
+			return &baseState{ok: s.cfg.DriverKnown(config.KeyIncludeFile), unset: !s.cfg.DriverKnown(config.KeyIncludeFile)}
 		}
 		p, absent := s.locate(path.Clean(inc))
 		t := s.header(p).table
@@ -485,7 +489,7 @@ func (s *Snapshot) facts(a *analysis) *Unit {
 			u.UnknownIncludes++
 		}
 	}
-	if !a.env.Complete && len(u.BadIncludes) == 0 && u.UnknownIncludes == 0 {
+	if !a.env.Complete && len(u.BadIncludes) == 0 && u.UnknownIncludes == 0 && !(a.base.unset && a.inc.complete) {
 		u.UnknownIncludes = 1 // an include of an include failed
 	}
 

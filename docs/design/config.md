@@ -86,7 +86,12 @@ build used. For a lib without its driver config at hand, the optional
 clangd takes compile_flags.txt when there is no compile_commands.json).
 Each key it sets wins over the driver config and the profile, and the
 rest come from those: the local file has the last word. They are said
-there and nowhere else in the file. The driver config's
+there and nowhere else in the file. One that none of them gives is
+unknown, not empty, since DGD does not start without it: what depends
+on it is not reported (as a checkout treats what it cannot see), and
+the project says once which are unset. `profile:` and `driver_config:`
+in one file is an error, as the profile's settings would leave the
+driver config unread. The driver config's
 `create` is not read: it is what the auto object receives, and in a lib
 whose auto object passes it on (the kernel library's `_F_create`), what
 objects define is `conventions.create`, default `create`.

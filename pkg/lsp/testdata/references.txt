@@ -151,6 +151,10 @@ highlight lib/obj/a.c 3:1
 > received window/logMessage
 < {"message": "project $ROOT/lib/dgdtools.yml: mudlib $ROOT/lib", "type": 3}
 < {
+<   "message": "note: driver settings not set: include_file, auto_object, driver_object, typechecking (set driver_config, or a driver: block)",
+<   "type": 3
+< }
+< {
 <   "message": "references to function query_weight: 2; 1 calls of query_weight on objects that cannot be told (in 1 files) may call it too and are not listed",
 <   "type": 3
 < }

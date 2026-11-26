@@ -149,6 +149,12 @@ func TestConfigCommand(t *testing.T) {
 	assert.Contains(t, out, "mudlib root:   "+filepath.Join(dir, "lib"))
 	assert.Contains(t, out, "typechecking:  1")
 	assert.Contains(t, out, "incomplete", "the configured include dir does not exist")
+	// What the driver config leaves out is unknown, not none.
+	assert.Contains(t, out, "include dirs:  /include\n")
+	assert.Contains(t, out, "include file:  (unknown: a name it could define as a macro is not reported)\n")
+	assert.Contains(t, out, "auto objects:  (unknown: a function called by name is not reported missing)\n")
+	assert.Contains(t, out, "driver object: (unknown: no function is renamed to a name the driver calls)\n")
+	assert.Contains(t, out, "note: driver settings not set: include_file, auto_object, driver_object (set driver_config, or a driver: block)\n")
 	// The settings of the file, and where each is from.
 	assert.Contains(t, out, "settings of "+filepath.Join(dir, "lib/a.c"))
 	assert.Contains(t, out, "indent style:  tab       ("+filepath.Join(dir, "lib/.editorconfig")+")")

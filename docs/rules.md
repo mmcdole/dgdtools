@@ -26,7 +26,7 @@ The driver refuses to compile it: an object with one of these does not load.
 
 The file does not parse; DGD will refuse to compile it.
 
-Reported by the linter's own error-tolerant parser, which implements the DGD 1.7 grammar on unpreprocessed source. A missing ';' is reported where the ';' belongs (DGD reports the token after it), with a fix that inserts it when the parser went on as if it were there. Errors that could be an artifact of a macro the linter cannot see through are not reported: a statement that uses a fragment macro, or, when some #include could not be resolved, an error next to an unknown identifier. After an error that leaves the file's structure in doubt (unbalanced braces) later errors in the file are dropped as likely consequences.
+Reported by the linter's own error-tolerant parser, which implements the DGD 1.7 grammar on unpreprocessed source. A missing ';' is reported where the ';' belongs (DGD reports the token after it), with a fix that inserts it when the parser went on as if it were there. Errors that could be an artifact of a macro the linter cannot see through are not reported: a statement that uses a fragment macro, or, when some #include could not be resolved or no include_file is set (the force-included header may define anything), an error next to an unknown identifier. After an error that leaves the file's structure in doubt (unbalanced braces) later errors in the file are dropped as likely consequences.
 
 ### adjacent-strings
 
@@ -66,7 +66,7 @@ DGD requires every local declaration of a block to come before the block's first
 
 #include target not found in the file's directory or the include dirs.
 
-A missing #include is a compile error when the object loads. Only reported when the mudlib is complete (the configured include dirs and force-included header exist); in a partial checkout the target is unknown, not missing. Like a C compiler's fatal "file not found", it stops syntax reporting for the rest of the file.
+A missing #include is a compile error when the object loads. Only reported when the mudlib is complete (the configured include dirs and force-included header exist); in a partial checkout the target is unknown, not missing, and so is any include when include_dirs is not set (a "..." include not found as written is looked for in them too). Like a C compiler's fatal "file not found", it stops syntax reporting for the rest of the file.
 
 ### bad-directive
 
@@ -110,7 +110,7 @@ It compiles, and fails or silently returns nil when it runs.
 
 String-referenced function (obj->fn(), call_other, call_out, registrars) missing from the target's inherit chain.
 
-In DGD a call_other to a function that does not exist silently returns nil. Reported only when the receiver is known (a string constant, a macro that evaluates to one, or this_object()) and the target's whole inherit chain was resolved and parsed; for a file that other objects inherit or #include, the function is also looked for in those users.
+In DGD a call_other to a function that does not exist silently returns nil. Reported only when the receiver is known (a string constant, a macro that evaluates to one, or this_object()) and the target's whole inherit chain was resolved and parsed, and auto_object is set (the auto object may have the function); for a file that other objects inherit or #include, the function is also looked for in those users.
 
 ### static-crossobj
 
@@ -162,7 +162,7 @@ Options:
 
 Callback by name (call_out, a registrar of the lib) to a private function, which DGD never calls.
 
-call_out("fn") and every callback the lib's registrars make by name (conventions.call_registry) find the function in the object's table of functions, and DGD leaves private functions out of that table, and the functions of an object inherited privately: the callback silently never happens. A static function is what such a callback can reach and no other object can call. Reported only when the receiver is this_object() and the name is a string constant, and when the name is private in the object's whole inherit chain, as known in full, and in every object that inherits or includes the file; not in a partial checkout or in the auto object. The ->fn and call_other forms are static-crossobj's. There is no fix: making the function static is what is usually meant, but a function that is no longer private redefines and clashes with the functions of that name of the objects it is inherited with, which only its author can weigh.
+call_out("fn") and every callback the lib's registrars make by name (conventions.call_registry) find the function in the object's table of functions, and DGD leaves private functions out of that table, and the functions of an object inherited privately: the callback silently never happens. A static function is what such a callback can reach and no other object can call. Reported only when the receiver is this_object() and the name is a string constant, and when the name is private in the object's whole inherit chain, as known in full, and in every object that inherits or includes the file; not in a partial checkout or in the auto object, nor when auto_object is not set. The ->fn and call_other forms are static-crossobj's. There is no fix: making the function static is what is usually meant, but a function that is no longer private redefines and clashes with the functions of that name of the objects it is inherited with, which only its author can weigh.
 
 ## suspicious
 

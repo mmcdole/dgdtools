@@ -107,6 +107,10 @@ exit
 > open lib/obj/monster.c
 > received window/logMessage
 < {"message": "project $ROOT/lib/dgdtools.yml: mudlib $ROOT/lib", "type": 3}
+< {
+<   "message": "note: driver settings not set: include_file, auto_object, driver_object, typechecking (set driver_config, or a driver: block)",
+<   "type": 3
+< }
 > prepare lib/obj/monster.c 3:9
 < {
 <   "range": {"start": {"line": 3, "character": 7}, "end": {"line": 3, "character": 17}},

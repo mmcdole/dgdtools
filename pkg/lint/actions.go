@@ -155,7 +155,7 @@ func (d *Document) undeclaredElsewhere(name string) bool {
 		}
 	}
 	if !s.AutoMember(d.Unit.LibPath) {
-		if _, ok := s.AutoFunc(name); ok || s.AutoUnseen() {
+		if _, ok := s.AutoFunc(name); ok || s.AutoUnseen() || s.AutoUnset() {
 			return false
 		}
 	}

@@ -3,6 +3,8 @@ package index
 import (
 	"context"
 	"slices"
+
+	"github.com/mmcdole/dgdtools/pkg/config"
 )
 
 // Chain is the flattened inherit view of one object.
@@ -250,6 +252,9 @@ type autoState struct {
 	// unseen says an auto object, or an object of its chain, is not
 	// known: what it gives every object is not all in funcs.
 	unseen bool
+	// unset says no auto_object was given: whether there is one, and
+	// what it gives every object, is unknown.
+	unset bool
 	// members are the lib paths of the auto objects, of the programs they
 	// inherit, and of the files those include as code.
 	members map[string]bool
@@ -258,6 +263,7 @@ type autoState struct {
 func (s *Snapshot) autoState() *autoState {
 	return s.auto.load(func() *autoState {
 		a := &autoState{funcs: map[string]ChainFunc{}, members: map[string]bool{}}
+		a.unset = !s.cfg.DriverKnown(config.KeyAutoObject)
 		for _, auto := range s.cfg.AutoObjects {
 			ch := s.Chain(NormalizeLibPath(auto, "/"))
 			a.unseen = a.unseen || ch.Unseen
@@ -291,6 +297,12 @@ func (s *Snapshot) AutoFunc(name string) (ChainFunc, bool) {
 // every object, by name. The map is the index's own: it is not to be
 // changed.
 func (s *Snapshot) AutoFuncs() map[string]ChainFunc { return s.autoState().funcs }
+
+// AutoUnset reports whether no auto_object was given, so that any
+// function may be the auto object's. What the auto object gives is then
+// left out of what is known (AutoFunc has none), and a function looked
+// for by name is not known to be missing.
+func (s *Snapshot) AutoUnset() bool { return s.autoState().unset }
 
 // AutoUnseen reports whether a configured auto object, or an object it
 // inherits, is not known at all (Chain.Unseen): it may give every object
@@ -447,7 +459,7 @@ func (s *Snapshot) lookupCallable(ctx context.Context, target, fn string, self b
 	if f, ok := auto.funcs[fn]; ok {
 		return Lookup{State: LookupFound, Fn: f}
 	}
-	if ch.Partial {
+	if ch.Partial || auto.unset {
 		return Lookup{State: LookupUnknown}
 	}
 	if !self {
@@ -570,7 +582,7 @@ func (q *Query) PrivateOnly(ctx context.Context, fn string) (f ChainFunc, inheri
 		return ChainFunc{}, false, false
 	}
 	auto := s.autoState()
-	if _, has := auto.funcs[fn]; has || auto.unseen || auto.members[libPath] {
+	if _, has := auto.funcs[fn]; has || auto.unseen || auto.unset || auto.members[libPath] {
 		return ChainFunc{}, false, false
 	}
 	memo := map[string]symbolState{}

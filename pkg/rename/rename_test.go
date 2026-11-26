@@ -102,7 +102,8 @@ conventions:
 func lib() vfs.Mem {
 	return vfs.Mem{
 		"/lib/dgdtools.yml":   cfg,
-		"/lib/mud.dgd":        "include_dirs = ({ \"/include\" });\nauto_object = \"/sys/auto\";\n",
+		"/lib/mud.dgd":        "include_dirs = ({ \"/include\" });\nauto_object = \"/sys/auto\";\ninclude_file = \"/include/auto.h\";\ndriver_object = \"/sys/driver\";\n",
+		"/lib/include/auto.h": "",
 		"/lib/include/std.h":  "#define ME this_object()\n#define STR(x) #x\n#define USES_SECRET (secret + 1)\n#define NAMES_FRESH fresh\n",
 		"/lib/include/flag.h": "#ifdef MINE\n#endif\n",
 		"/lib/sys/auto.c":     "static void write(string s) {}\nvoid autof() {}\nstatic void set_auto_save() {}\n",

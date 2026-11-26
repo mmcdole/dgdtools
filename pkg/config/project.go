@@ -345,6 +345,8 @@ func resolve(fs vfs.FS, opt DiscoverOptions, found, base string) (*Project, erro
 		}
 		return err
 	}
+	// Each driver setting is unknown until something gives it.
+	unset := slices.Clone(DriverKeys)
 	var prof *profile.Profile
 	if ref != "" {
 		p, err := profile.Load(fs, ref, rel, opt.ProfileDirs)
@@ -359,6 +361,14 @@ func resolve(fs vfs.FS, opt DiscoverOptions, found, base string) (*Project, erro
 		prj.Profile = prof
 		prj.inputs = append(prj.inputs, prof.Path)
 		applyProfile(cfg, prof)
+		unset = []string{KeyTypechecking} // the profile has the rest
+		if cfg.DriverConfig != "" {
+			// A profile named by the caller wins over the file's
+			// driver_config, which is not read; Validate refuses the
+			// two in one file.
+			prj.Notes = append(prj.Notes, diag.Note{Kind: diag.NoteDriverConfigIgnored, Path: cfg.DriverConfig,
+				Message: fmt.Sprintf("driver_config %s not read: the driver settings are profile %s's", cfg.DriverConfig, prof.Name)})
+		}
 		// What the profile says is checked like what the file says.
 		if err := cfg.Validate(); err != nil {
 			return nil, fmt.Errorf("%s: %w", prof.Path, err)
@@ -376,6 +386,7 @@ func resolve(fs vfs.FS, opt DiscoverOptions, found, base string) (*Project, erro
 			}
 		default:
 			d.Apply(cfg)
+			unset = d.unset()
 			if err := cfg.Validate(); err != nil {
 				return nil, fmt.Errorf("%s: %w", dc, err)
 			}
@@ -383,6 +394,12 @@ func resolve(fs vfs.FS, opt DiscoverOptions, found, base string) (*Project, erro
 	}
 	// What the file's driver: block sets wins over both. Load checked it.
 	cfg.applyDriver()
+	cfg.DriverUnset = nil
+	for _, k := range unset {
+		if !slices.Contains(cfg.Driver.set(), k) && (k != KeyTypechecking || cfg.Dialect.Typechecking == nil) {
+			cfg.DriverUnset = append(cfg.DriverUnset, k)
+		}
+	}
 
 	switch {
 	case opt.Root != "":
@@ -420,6 +437,14 @@ func resolve(fs vfs.FS, opt DiscoverOptions, found, base string) (*Project, erro
 	}
 	if prj.Root != "" && !prj.Partial && !fs.IsDir(prj.Root) {
 		return nil, fmt.Errorf("mudlib root %s is not a directory", prj.Root)
+	}
+	if prj.HasLib() && len(cfg.DriverUnset) > 0 {
+		how := "set driver_config, or a driver: block"
+		if prj.Profile != nil {
+			how = "set them in a driver: block"
+		}
+		prj.Notes = append(prj.Notes, diag.Note{Kind: diag.NoteDriverUnset, Path: prj.ConfigPath,
+			Message: fmt.Sprintf("driver settings not set: %s (%s)", strings.Join(cfg.DriverUnset, ", "), how)})
 	}
 	return prj, nil
 }
@@ -701,13 +726,10 @@ type DriverConfig struct {
 	Typechecking *int
 }
 
-// driverKeys are the keys of the driver: block.
-var driverKeys = []string{"include_dirs", "include_file", "auto_object", "driver_object", "typechecking"}
-
 func (dc *DriverConfig) UnmarshalYAML(n *yaml.Node) error {
 	*dc = DriverConfig{}
 	if n.Kind != yaml.MappingNode {
-		return fmt.Errorf("line %d: driver: want a mapping with any of %s", n.Line, strings.Join(driverKeys, ", "))
+		return fmt.Errorf("line %d: driver: want a mapping with any of %s", n.Line, strings.Join(DriverKeys, ", "))
 	}
 	for k, v := range pairs(n) {
 		str := func(s *string) error {
@@ -753,7 +775,7 @@ func (dc *DriverConfig) UnmarshalYAML(n *yaml.Node) error {
 			dc.Typechecking = &tc
 		default:
 			msg := fmt.Sprintf("line %d: unknown key %q in driver", k.Line, k.Value)
-			if near := fuzzy.Nearest(k.Value, driverKeys); near != "" {
+			if near := fuzzy.Nearest(k.Value, DriverKeys); near != "" {
 				msg += fmt.Sprintf(" (did you mean %q?)", near)
 			}
 			return errors.New(msg)
@@ -813,6 +835,7 @@ func ReadDriverConfig(fs vfs.FS, path string) (*DriverConfig, error) {
 				dc.Typechecking = &n
 			}
 		case "include_dirs":
+			dc.IncludeDirs = []string{} // ({ }) is none
 			for _, v := range vals {
 				if v.Kind == token.StringLit {
 					dc.IncludeDirs = append(dc.IncludeDirs, str(v))
@@ -821,6 +844,33 @@ func ReadDriverConfig(fs vfs.FS, path string) (*DriverConfig, error) {
 		}
 	}
 	return dc, nil
+}
+
+// set returns the driver settings the driver config (or the driver:
+// block) gives, in DriverKeys order.
+func (dc *DriverConfig) set() []string {
+	var keys []string
+	for _, k := range []struct {
+		key string
+		set bool
+	}{
+		{KeyIncludeDirs, dc.IncludeDirs != nil},
+		{KeyIncludeFile, dc.IncludeFile != ""},
+		{KeyAutoObject, dc.AutoObject != ""},
+		{KeyDriverObject, dc.DriverObject != ""},
+		{KeyTypechecking, dc.Typechecking != nil},
+	} {
+		if k.set {
+			keys = append(keys, k.key)
+		}
+	}
+	return keys
+}
+
+// unset returns the driver settings the driver config does not give.
+func (dc *DriverConfig) unset() []string {
+	set := dc.set()
+	return slices.DeleteFunc(slices.Clone(DriverKeys), func(k string) bool { return slices.Contains(set, k) })
 }
 
 // Apply sets the config's driver settings to the driver config's.

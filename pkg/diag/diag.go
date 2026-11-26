@@ -176,6 +176,12 @@ const (
 	// NoteNestedProject: a directory below the project has a root config
 	// of its own and is another project; its files were passed over.
 	NoteNestedProject NoteKind = "nested-project"
+	// NoteDriverUnset: driver settings that nothing gives; what depends
+	// on them is unknown.
+	NoteDriverUnset NoteKind = "driver-unset"
+	// NoteDriverConfigIgnored: a profile named by the caller gives the
+	// driver settings, and the config's driver_config is not read.
+	NoteDriverConfigIgnored NoteKind = "driver-config-ignored"
 )
 
 // String renders the diagnostic on one line, compiler style.

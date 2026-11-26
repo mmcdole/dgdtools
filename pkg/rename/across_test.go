@@ -24,7 +24,8 @@ import (
 func wideLib() vfs.Mem {
 	return vfs.Mem{
 		"/lib/dgdtools.yml":    cfg,
-		"/lib/mud.dgd":         "include_dirs = ({ \"/include\" });\nauto_object = \"/sys/auto\";\n",
+		"/lib/mud.dgd":         "include_dirs = ({ \"/include\" });\nauto_object = \"/sys/auto\";\ninclude_file = \"/include/auto.h\";\ndriver_object = \"/sys/driver\";\n",
+		"/lib/include/auto.h":  "",
 		"/lib/include/std.h":   "#define ME this_object()\n#define LIVING \"/std/living\"\n#define QN query_name()\n",
 		"/lib/include/hp.h":    "#define MAX_HP 100\n",
 		"/lib/sys/auto.c":      "static void write(string s) {}\nvoid autof() {}\n",
@@ -336,6 +337,19 @@ func TestRenameDriverCalls(t *testing.T) {
 	assert.Equal(t, "refused: 'compile_error' is a function the driver calls by name in the driver object (/sys/driver): renamed so, the function is called by the driver",
 		w.renamed("/lib/sys/driver.c", "void hel|per", "compile_error", false, false))
 	assert.NotContains(t, w.renamed("/lib/obj/other.c", "path_r|ead", "compile_error", false, false), "refused", "not the driver object's")
+
+	// With no driver_object, any object may be the driver object.
+	w = newWorld(t, vfs.Mem{
+		"/lib/dgdtools.yml": "root: .\n",
+		"/lib/sys/base.c":   "string path_read(string p) { return p; }\nvoid helper() {}\n",
+		"/lib/obj/other.c":  "inherit \"/sys/base\";\n",
+	}, "/lib")
+	require.True(t, w.l.Scan(context.Background()))
+	assert.Equal(t, "refused: 'path_read' may be a function of the driver object, which the driver calls by name: driver_object is not set",
+		w.prepare("/lib/sys/base.c", "path_r|ead"))
+	assert.Equal(t, "refused: 'compile_error' is a function the driver calls by name in the driver object, and driver_object is not set: renamed so, the function may be called by the driver",
+		w.renamed("/lib/sys/base.c", "void hel|per", "compile_error", false, false))
+	assert.NotContains(t, w.renamed("/lib/sys/base.c", "void hel|per", "assist", false, false), "refused")
 }
 
 // A macro used in a file an edit lands in, whose body names the new
