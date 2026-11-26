@@ -316,7 +316,8 @@ func (s *server) progress(done <-chan struct{}, token, title string) {
 // diagnostics returns the findings of d as the protocol has them.
 func (s *server) diagnostics(sess *session.Session, d *lint.Document) []Diagnostic {
 	c := &converter{caps: s.caps, version: s.opt.Version, sess: sess, doc: d,
-		m: NewPositionMapper(d.File.Src, s.caps.encoding())}
+		uri: s.uris(),
+		m:   NewPositionMapper(d.File.Src, s.caps.encoding())}
 	out := make([]Diagnostic, 0, len(d.Diagnostics))
 	for i := range d.Diagnostics {
 		out = append(out, c.diagnostic(&d.Diagnostics[i]))
@@ -331,6 +332,8 @@ type converter struct {
 	sess    *session.Session
 	doc     *lint.Document
 	m       *PositionMapper
+	// uri names a file to the client (server.uris).
+	uri func(string) string
 	// others are the mappers of the other files related locations are
 	// in, nil for one that cannot be read.
 	others map[string]*PositionMapper
@@ -362,7 +365,7 @@ func (c *converter) diagnostic(d *diag.Diagnostic) Diagnostic {
 		for i := range d.Related {
 			r := &d.Related[i]
 			out.RelatedInformation = append(out.RelatedInformation, DiagnosticRelatedInformation{
-				Location: Location{URI: uriOf(r.Path), Range: c.related(r)},
+				Location: Location{URI: c.uri(r.Path), Range: c.related(r)},
 				Message:  r.Message,
 			})
 		}

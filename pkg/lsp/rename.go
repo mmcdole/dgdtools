@@ -243,11 +243,12 @@ func (s *server) workspaceEdit(byPath map[string][]edit, annotations map[string]
 	if !s.caps.documentChanges {
 		result.Changes = map[string][]TextEdit{}
 	}
+	uri := s.uris()
 	s.mu.Lock()
 	versions := map[string]int{}
-	for _, path := range paths {
-		if doc := s.docs[uriOf(path)]; doc != nil && doc.path == path {
-			versions[path] = doc.version
+	for _, doc := range s.docs {
+		if _, edited := byPath[doc.path]; edited && doc.uri == uri(doc.path) {
+			versions[doc.path] = doc.version
 		}
 	}
 	s.mu.Unlock()
@@ -266,7 +267,7 @@ func (s *server) workspaceEdit(byPath map[string][]edit, annotations map[string]
 		for _, e := range es {
 			out = append(out, TextEdit{Range: pm.Range(e.Start, e.End), NewText: e.NewText, AnnotationID: e.annotation})
 		}
-		u := uriOf(path)
+		u := uri(path)
 		if !s.caps.documentChanges {
 			result.Changes[u] = out
 			continue

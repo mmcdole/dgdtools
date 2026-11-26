@@ -24,12 +24,16 @@ import (
 func (s *server) willRenameFiles(ctx context.Context, p *RenameFilesParams) (*WorkspaceEdit, error) {
 	s.mu.Lock()
 	sess := s.session
+	paths := make([][2]string, len(p.Files))
+	for i, f := range p.Files {
+		paths[i] = [2]string{s.pathOf(f.OldURI), s.pathOf(f.NewURI)}
+	}
 	s.mu.Unlock()
 	// The moves of each lib.
 	var libs []*lint.Linter
 	moves := map[*lint.Linter][]rename.Move{}
-	for _, f := range p.Files {
-		from, to := pathOf(f.OldURI), pathOf(f.NewURI)
+	for _, fromTo := range paths {
+		from, to := fromTo[0], fromTo[1]
 		if from == "" || to == "" {
 			continue
 		}

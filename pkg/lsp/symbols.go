@@ -131,6 +131,7 @@ func (s *server) workspaceSymbol(ctx context.Context, p *WorkspaceSymbolParams) 
 	}
 	slices.SortStableFunc(order, func(a, b int) int { return cmp.Compare(found[b].Score, found[a].Score) })
 	out := []SymbolInformation{}
+	uri := s.uris()
 	mappers := map[string]*PositionMapper{}
 	seen := map[Location]bool{}
 	for _, i := range order {
@@ -156,7 +157,7 @@ func (s *server) workspaceSymbol(ctx context.Context, p *WorkspaceSymbolParams) 
 		if !s.caps.utf8 {
 			width = utf16Len(sym.Name)
 		}
-		loc := Location{URI: uriOf(sym.Path), Range: Range{Start: start, End: Position{Line: start.Line, Character: start.Character + width}}}
+		loc := Location{URI: uri(sym.Path), Range: Range{Start: start, End: Position{Line: start.Line, Character: start.Character + width}}}
 		if seen[loc] {
 			continue
 		}

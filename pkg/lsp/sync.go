@@ -99,7 +99,7 @@ func (s *server) didOpen(p *DidOpenTextDocumentParams) {
 	if old := s.docs[uri]; old != nil {
 		s.unschedule(old) // opened twice: the second is what it is now
 	}
-	doc := &document{uri: uri, path: pathOf(uri), version: p.TextDocument.Version, text: []byte(p.TextDocument.Text)}
+	doc := &document{uri: uri, path: s.pathOf(uri), version: p.TextDocument.Version, text: []byte(p.TextDocument.Text)}
 	doc.lines = lineStarts(doc.text)
 	s.docs[uri] = doc
 	if doc.path == "" {
@@ -150,7 +150,7 @@ func (s *server) didChangeWatchedFiles(p *DidChangeWatchedFilesParams) {
 		// A file that is open is its buffer whatever the disk has: for
 		// the tools nothing changed. A directory is passed on as the
 		// directory.
-		if path := pathOf(c.URI); path != "" && s.byPath(path) == nil && !slices.Contains(paths, path) {
+		if path := s.pathOf(c.URI); path != "" && s.byPath(path) == nil && !slices.Contains(paths, path) {
 			paths = append(paths, path)
 		}
 	}

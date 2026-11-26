@@ -74,7 +74,7 @@ func (s *server) codeAction(ctx context.Context, p *CodeActionParams) ([]CodeAct
 		}
 		return nil, err
 	}
-	c := &converter{caps: s.caps, sess: sess, doc: d,
+	c := &converter{caps: s.caps, sess: sess, doc: d, uri: s.uris(),
 		m: NewPositionMapper(d.File.Src, s.caps.encoding())}
 	edit := func(edits []diag.TextEdit) *WorkspaceEdit {
 		out := make([]TextEdit, 0, len(edits))

@@ -1318,6 +1318,7 @@ func (u unionFS) ReadFile(p string) ([]byte, error)            { return u.pick(p
 func (u unionFS) Exists(p string) bool                         { return u.pick(p).Exists(p) }
 func (u unionFS) IsDir(p string) bool                          { return u.pick(p).IsDir(p) }
 func (u unionFS) WalkDir(root string, fn fs.WalkDirFunc) error { return u.disk.WalkDir(root, fn) }
+func (u unionFS) RealPath(p string) (string, error)            { return p, nil }
 
 // ------------------------------------------------------- concurrency
 

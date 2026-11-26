@@ -189,6 +189,10 @@ func (s *Snapshot) FilesNamed(ctx context.Context, name string, dirs []string) [
 					return nil
 				case d.IsDir() && strings.HasPrefix(d.Name(), ".") && filepath.Clean(p) != filepath.Clean(root):
 					return fs.SkipDir
+				case d.IsDir() && d.Type()&fs.ModeSymlink != 0 && filepath.Clean(p) != filepath.Clean(root):
+					if _, ok := s.lay.Enters(s.fs, p); !ok {
+						return fs.SkipDir // as a walk of the lib does
+					}
 				case !d.IsDir() && d.Name() == name:
 					add(p)
 				}

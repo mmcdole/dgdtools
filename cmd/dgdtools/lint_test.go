@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -506,4 +507,39 @@ func TestLintFix(t *testing.T) {
 	code, _, errs = dgdtools(t, "", "lint", "--diff", file)
 	assert.Equal(t, 2, code)
 	assert.Contains(t, errs, "--diff shows what --fix would do")
+}
+
+// A directory linked into the lib from outside is part of the lib, named
+// by its path there; a link into the lib does not lint a file twice, and
+// exclude skips a linked directory. A real path named on the command line
+// is the file it is.
+func TestLintLinkedDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("making a link needs a privilege on Windows")
+	}
+	dir := tree(t, map[string]string{
+		"mud/dgdtools.yml":        "root: lib\n",
+		"mud/lib/std/item.c":      "void create() { }\n",
+		"mud/lib/d/Viking/hall.c": castle,
+		"outside/knubo/raven.c":   "inherit \"/std/item\";\nvoid create() { }\n",
+	})
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "mud/lib/players"), 0o755))
+	require.NoError(t, os.Symlink(filepath.Join(dir, "outside/knubo"), filepath.Join(dir, "mud/lib/players/knubo")))
+	require.NoError(t, os.Symlink(filepath.Join(dir, "mud/lib/d/Viking"), filepath.Join(dir, "mud/lib/players/viking")))
+	t.Chdir(filepath.Join(dir, "mud"))
+
+	code, out, errs := dgdtools(t, "", "lint")
+	assert.Equal(t, 1, code)
+	assert.Contains(t, out, "lib/players/knubo/raven.c:2:6: warning: create() overrides inherited /std/item::create()")
+	assert.Contains(t, out, "lib/d/Viking/hall.c:5:11")
+	assert.NotContains(t, out, "players/viking")
+	assert.Contains(t, errs, "3 files")
+
+	write(t, dir, map[string]string{"mud/dgdtools.yml": "root: lib\nexclude: [players/knubo/**]\n"})
+	_, out, errs = dgdtools(t, "", "lint")
+	assert.NotContains(t, out, "raven.c")
+	assert.Contains(t, errs, "2 files")
+
+	_, _, errs = dgdtools(t, "", "lint", filepath.Join(dir, "outside/knubo/raven.c"))
+	assert.Contains(t, errs, "file-local rules only")
 }
