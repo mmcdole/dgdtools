@@ -8,6 +8,8 @@ root: .
 driver_config: mud.dgd
 -- lib/mud.dgd --
 include_dirs = ({ "/include" });
+auto_object = "/sys/auto";
+-- lib/sys/auto.c --
 -- lib/include/std.h --
 #define STD 1
 -- lib/players/ann/defs.h --

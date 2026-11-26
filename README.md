@@ -85,6 +85,17 @@ profile_build:               # only needed to publish a profile
 profile: mymud
 ```
 
+**Mudlib without its driver config** (placed in `lib/`): give the driver settings yourself, or take them from the profile.
+
+```yaml
+root: .
+driver: { include_dirs: [/include], include_file: /include/std.h, auto_object: /kernel/auto, driver_object: /kernel/driver }
+# or, instead of driver:
+# profile: mymud
+```
+
+A driver setting that is not given is unknown, not empty: checks that depend on it stay quiet, and `dgdtools lint` names it.
+
 Then run `dgdtools lint` or open the folder in your editor:
 
 ```text

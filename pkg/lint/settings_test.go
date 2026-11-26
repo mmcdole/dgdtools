@@ -43,11 +43,12 @@ func TestSettingsScopes(t *testing.T) {
 		res, err := l.Run(context.Background(), lint.Request{Options: opt})
 		require.NoError(t, err)
 		// The project below is passed over, and the run says so.
-		require.Len(t, res.Notes, 1)
+		require.Len(t, res.Notes, 2)
+		assert.Equal(t, diag.NoteDriverUnset, res.Notes[0].Kind)
 		assert.Equal(t, diag.Note{
 			Kind: diag.NoteNestedProject, Path: "/mud/lib/players/cyd/dgdtools.yml",
 			Message: "1 file under /mud/lib/players/cyd is a project of their own (dgdtools.yml) and was not linted: lint that directory by itself",
-		}, res.Notes[0])
+		}, res.Notes[1])
 		var out []string
 		for _, d := range res.Diagnostics {
 			out = append(out, fmt.Sprintf("%s %s %s", strings.TrimPrefix(d.Path, "/mud/lib/"), d.Rule, d.Severity))

@@ -561,12 +561,12 @@ func TestLogAndTrace(t *testing.T) {
 // cannot be asked says them itself.
 func TestSettings(t *testing.T) {
 	files := map[string]string{
-		"ann/a.c":           "void f() { \"/players/ann/b\"->nofn(); \"/players/ann/b\"->fn(); }\n",
+		"ann/a.c":           "void f() { \"/players/ann/nob\"->fn(); \"/players/ann/b\"->fn(); }\n",
 		"ann/b.c":           "void fn() {}\n",
-		"bob/a.c":           "void f() { \"/players/bob/b\"->nofn(); }\n",
+		"bob/a.c":           "void f() { \"/players/bob/nob\"->fn(); }\n",
 		"bob/b.c":           "void fn() {}\n",
 		"lib/dgdtools.yml":  "root: .\n",
-		"lib/players/c.c":   "void f() { \"/players/b\"->nofn(); }\n",
+		"lib/players/c.c":   "void f() { \"/players/nob\"->fn(); }\n",
 		"lib/players/b.c":   "void fn() {}\n",
 		"elsewhere/alone.c": "void f() { \"/players/ann/b\"->nofn(); a == 1; }\n",
 	}
@@ -586,9 +586,9 @@ func TestSettings(t *testing.T) {
 		return b.String()
 	}
 	const (
-		none = "ann/a.c []\nbob/a.c []\nlib/players/c.c [callable-not-found]\nelsewhere/alone.c [no-effect-statement]\n"
-		ann  = "ann/a.c [callable-not-found]\nbob/a.c []\nlib/players/c.c [callable-not-found]\nelsewhere/alone.c [no-effect-statement]\n"
-		both = "ann/a.c [callable-not-found]\nbob/a.c [callable-not-found]\nlib/players/c.c [callable-not-found]\nelsewhere/alone.c [no-effect-statement]\n"
+		none = "ann/a.c []\nbob/a.c []\nlib/players/c.c [target-object-missing]\nelsewhere/alone.c [no-effect-statement]\n"
+		ann  = "ann/a.c [target-object-missing]\nbob/a.c []\nlib/players/c.c [target-object-missing]\nelsewhere/alone.c [no-effect-statement]\n"
+		both = "ann/a.c [target-object-missing]\nbob/a.c [target-object-missing]\nlib/players/c.c [target-object-missing]\nelsewhere/alone.c [no-effect-statement]\n"
 	)
 
 	c := start(t)
@@ -738,6 +738,37 @@ func TestStubContent(t *testing.T) {
 	require.NoError(t, c.Shutdown())
 }
 
+// The driver settings a project does not give are named in the log once
+// for the project, not for each file, and what depends on them is not
+// reported.
+func TestDriverUnsetNote(t *testing.T) {
+	files := map[string]string{
+		"dgdtools.yml": "root: .\n",
+		"obj/a.c":      "void f() { \"/obj/b\"->nofn(); }\n",
+		"obj/b.c":      "#include <nosuch.h>\nvoid g() { }\n",
+	}
+	dir := tree(t, files)
+	c := start(t)
+	c.Initialize(lsptest.Capabilities{}, dir)
+	for _, rel := range []string{"obj/a.c", "obj/b.c"} {
+		c.Open(filepath.Join(dir, rel), files[rel])
+		assert.Empty(t, published(t, c, filepath.Join(dir, rel)), rel)
+	}
+	c.Idle()
+	const note = "note: driver settings not set: include_dirs, include_file, auto_object, driver_object, typechecking (set driver_config, or a driver: block)"
+	n := 0
+	var logged []string
+	for _, m := range c.Received("window/logMessage") {
+		var p lsp.LogMessageParams
+		require.NoError(t, json.Unmarshal(m.Params, &p))
+		logged = append(logged, p.Message)
+		if p.Message == note {
+			n++
+		}
+	}
+	assert.Equal(t, 1, n, "%q", logged)
+}
+
 // A file that is Latin-1 on disk, opened as what it is and opened as
 // UTF-8, which it is not: the same findings in the same places of the
 // text the editor has, and a warning for the second.
@@ -750,7 +781,7 @@ func TestLatin1(t *testing.T) {
 		// bytes before the place.
 		user = "void f() { \"/obj/t\"->h(1, 2); }\n"
 	)
-	dir := tree(t, map[string]string{"dgdtools.yml": "root: .\n", "obj/t.c": disk + "/* \xe5\xe5\xe5 */ void h(int a) {}\n", "obj/u.c": user})
+	dir := tree(t, map[string]string{"dgdtools.yml": "root: .\ndriver: {auto_object: /obj/auto}\n", "obj/auto.c": "", "obj/t.c": disk + "/* \xe5\xe5\xe5 */ void h(int a) {}\n", "obj/u.c": user})
 	path := filepath.Join(dir, "obj/t.c")
 	for _, enc := range [][]string{nil, {lsp.UTF8}} {
 		var found [][]string

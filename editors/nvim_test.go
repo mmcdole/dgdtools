@@ -945,7 +945,8 @@ vim.cmd('qall!')
 // action, and move a file the current one inherits, the inherit edited.
 func TestNeovimRefactor(t *testing.T) {
 	files := map[string]string{
-		"lib/dgdtools.yml": "root: .\n",
+		"lib/dgdtools.yml": "root: .\ndriver: {auto_object: /sys/auto}\n",
+		"lib/sys/auto.c":   "",
 		"lib/std/room.c":   "int light;\n",
 		"lib/obj/a.c":      "inherit \"/std/room\";\nvoid f() { helper(1); }\n\nint helper(int n) { return n; }\n",
 	}

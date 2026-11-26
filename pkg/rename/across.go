@@ -251,7 +251,11 @@ func (rn *renamer) family(a *across, units []*index.Unit, t *Target) error {
 		a.objects[t.Def.Object] = true
 	}
 	// What cannot be renamed in the family.
-	if driverCalls[name] && rn.driver != "" {
+	switch {
+	case driverCalls[name] && rn.driver == "":
+		// With no driver_object given, any object may be it.
+		return refuse("'%s' may be a function of the driver object, which the driver calls by name: driver_object is not set", name)
+	case driverCalls[name]:
 		if fn, ok := rn.snap.ChainFunc(rn.driver, name); ok && a.want[locKey(fn.Loc)] {
 			return refuse("'%s' is a function of the driver object (%s), which the driver calls by name", name, rn.driver)
 		}
@@ -446,10 +450,13 @@ func (rn *renamer) planAcross(ctx context.Context, plan *Plan, a *across) error 
 // name: the create function, in every object, and in the driver object
 // (inDriver: the function is one of it) the functions the driver calls
 // there. The renamed function would be called when nothing called it.
+// With no driver object given, any object may be it.
 func (rn *renamer) calledByName(n string, inDriver bool) error {
 	switch {
 	case n == rn.create:
 		return refuse("'%s' is the function the driver calls by name to initialize every object (create in the configuration): renamed so, the function is called when an object is made", n)
+	case rn.driver == "" && driverCalls[n]:
+		return refuse("'%s' is a function the driver calls by name in the driver object, and driver_object is not set: renamed so, the function may be called by the driver", n)
 	case inDriver && driverCalls[n]:
 		return refuse("'%s' is a function the driver calls by name in the driver object (%s): renamed so, the function is called by the driver", n, rn.driver)
 	}

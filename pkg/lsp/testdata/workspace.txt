@@ -17,7 +17,7 @@ void put(string what) {}
 #include <paths.h>
 void f() { STORE->put("x", 1); "/obj/chest"->open(); }
 -- wizard/b.c --
-void g() { "/players/ann/c"->nofn(); }
+void g() { "/players/ann/nob"->fn(); }
 -- wizard/c.c --
 void fn() {}
 -- script --
@@ -194,6 +194,10 @@ exit
 < }
 > received window/logMessage
 < {"message": "project $ROOT/lib/dgdtools.yml: mudlib $ROOT/lib", "type": 3}
+< {
+<   "message": "note: driver settings not set: include_file, auto_object, driver_object, typechecking (set driver_config, or a driver: block)",
+<   "type": 3
+< }
 # The header changes on disk: STORE is another object.
 > write lib/include/paths.h "#define STORE \"/obj/nowhere\"\n"
 > watched changed lib/include/paths.h
@@ -283,18 +287,28 @@ exit
 <   "version": 1,
 <   "diagnostics": [
 <     {
-<       "range": {"start": {"line": 0, "character": 29}, "end": {"line": 0, "character": 33}},
+<       "range": {"start": {"line": 0, "character": 31}, "end": {"line": 0, "character": 33}},
 <       "severity": 1,
-<       "code": "R001",
-<       "codeDescription": {"href": "https://github.com/mmcdole/dgdtools/blob/main/docs/rules.md#callable-not-found"},
+<       "code": "R004",
+<       "codeDescription": {
+<         "href": "https://github.com/mmcdole/dgdtools/blob/main/docs/rules.md#target-object-missing"
+<       },
 <       "source": "dgdtools",
-<       "message": "function 'nofn' is not defined in /players/ann/c (called via ->)"
+<       "message": "object /players/ann/nob does not exist (called via ->)"
 <     }
 <   ]
 < }
 > received window/logMessage
 < {"message": "project $ROOT/lib/dgdtools.yml: mudlib $ROOT/lib", "type": 3}
+< {
+<   "message": "note: driver settings not set: include_file, auto_object, driver_object, typechecking (set driver_config, or a driver: block)",
+<   "type": 3
+< }
 < {"message": "no dgdtools.yml: $ROOT/wizard is /players/ann", "type": 3}
+< {
+<   "message": "note: driver settings not set: include_dirs, include_file, auto_object, driver_object, typechecking (set driver_config, or a driver: block)",
+<   "type": 3
+< }
 > settings wizard {}
 > configuration
 > diagnostics wizard/b.c

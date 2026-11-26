@@ -185,9 +185,17 @@ func configCmd(ctx context.Context, args []string, _ io.Reader, stdout, stderr i
 	if prj.CheckoutLib != "" {
 		fmt.Fprintf(w, "checkout:      %s is %s\n", prj.CheckoutDir, prj.CheckoutLib)
 	}
-	fmt.Fprintf(w, "include dirs:  %s\n", orNone(strings.Join(cfg.IncludeDirs, ", ")))
-	fmt.Fprintf(w, "include file:  %s\n", orNone(cfg.IncludeFile))
-	fmt.Fprintf(w, "auto objects:  %s\n", orNone(strings.Join(cfg.AutoObjects, ", ")))
+	// A driver setting nothing gave is unknown, not none.
+	driver := func(key, val, unknown string) string {
+		if !cfg.DriverKnown(key) {
+			return "(unknown: " + unknown + ")"
+		}
+		return orNone(val)
+	}
+	fmt.Fprintf(w, "include dirs:  %s\n", driver(config.KeyIncludeDirs, strings.Join(cfg.IncludeDirs, ", "), "an include that is not found is not reported"))
+	fmt.Fprintf(w, "include file:  %s\n", driver(config.KeyIncludeFile, cfg.IncludeFile, "a name it could define as a macro is not reported"))
+	fmt.Fprintf(w, "auto objects:  %s\n", driver(config.KeyAutoObject, strings.Join(cfg.AutoObjects, ", "), "a function called by name is not reported missing"))
+	fmt.Fprintf(w, "driver object: %s\n", driver(config.KeyDriverObject, cfg.DriverObject, "no function is renamed to a name the driver calls"))
 	tc := "(unknown: typechecking-dependent rules are silent)"
 	if cfg.Dialect.Typechecking != nil {
 		tc = fmt.Sprint(*cfg.Dialect.Typechecking)

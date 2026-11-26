@@ -351,6 +351,7 @@ func TestProfileCommands(t *testing.T) {
 	code, _, errs = dgdtools(t, "", "profile", "build", "--config", filepath.Join(dir, "dgdtools.yml"))
 	assert.Equal(t, 0, code, errs)
 	assert.Contains(t, errs, `profile "tiny"`)
+	assert.Contains(t, errs, "note: driver settings not set: include_file, auto_object, driver_object, typechecking (set driver_config, or a driver: block); the profile gives them as none\n")
 	prof := filepath.Join(dir, "dgdtools.profile")
 	assert.FileExists(t, prof)
 	code, out, _ = dgdtools(t, "", "profile", "show", prof, "/std/base.c")
@@ -419,9 +420,39 @@ func TestLintExitCode(t *testing.T) {
 
 // Standard input is linted as a nameless buffer, or, with a name, as
 // that file in that file's project in place of what is on disk.
+// The driver settings nothing gives are named once per run, however many
+// files are linted; with all of them given, nothing is said.
+func TestLintDriverUnsetNote(t *testing.T) {
+	dir := tree(t, map[string]string{
+		"dgdtools.yml": "root: lib\n",
+		"lib/a.c":      "#include <nosuch.h>\nvoid f() { \"/b\"->nofn(); }\n",
+		"lib/b.c":      "void g() { }\n",
+		"lib/c.c":      "",
+	})
+	t.Chdir(dir)
+	code, out, errs := dgdtools(t, "", "lint")
+	assert.Equal(t, 0, code, errs)
+	assert.Empty(t, out)
+	const note = "note: driver settings not set: include_dirs, include_file, auto_object, driver_object, typechecking (set driver_config, or a driver: block)\n"
+	assert.Equal(t, 1, strings.Count(errs, note), errs)
+	assert.Equal(t, 1, strings.Count(errs, "driver settings not set"), errs)
+
+	write(t, dir, map[string]string{
+		"dgdtools.yml":      "root: lib\ndriver: {include_dirs: [/include], include_file: /include/std.h, auto_object: /auto, driver_object: /driver, typechecking: 0}\n",
+		"lib/include/std.h": "",
+		"lib/auto.c":        "",
+	})
+	code, out, errs = dgdtools(t, "", "lint")
+	assert.Equal(t, 1, code, errs)
+	assert.Contains(t, out, "a.c:1:1: error: cannot find include file <nosuch.h> [E006 include-not-found]")
+	assert.Contains(t, out, "a.c:2:18: error: function 'nofn' is not defined in /b (called via ->) [R001 callable-not-found]")
+	assert.NotContains(t, errs, "driver settings")
+}
+
 func TestLintStdin(t *testing.T) {
 	dir := tree(t, map[string]string{
-		"dgdtools.yml":     "root: lib\nlint:\n  overrides:\n    - paths: [\"quiet/**\"]\n      rules: {no-effect-statement: off}\n",
+		"dgdtools.yml":     "root: lib\ndriver: {auto_object: /std/auto}\nlint:\n  overrides:\n    - paths: [\"quiet/**\"]\n      rules: {no-effect-statement: off}\n",
+		"lib/std/auto.c":   "",
 		"lib/std/base.c":   "void known() { }\n",
 		"lib/obj/saved.c":  "void f() { }\n",
 		"lib/quiet/keep.c": "",

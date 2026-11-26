@@ -73,7 +73,7 @@ type File struct {
 	Create string
 	// DriverObject is the lib path of the driver object, whose functions
 	// the driver calls by name (the configuration's driver_object; "":
-	// not known).
+	// not known, and then any object may be it).
 	DriverObject string
 	// Force overrules a refusal that a person may overrule
 	// (Refusal.Forcible: a variable save_object writes), which becomes a

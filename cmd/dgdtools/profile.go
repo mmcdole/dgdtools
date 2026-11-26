@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mmcdole/dgdtools/pkg/config"
+	"github.com/mmcdole/dgdtools/pkg/diag"
 	"github.com/mmcdole/dgdtools/pkg/profile"
 	"github.com/mmcdole/dgdtools/pkg/profilebuild"
 )
@@ -53,6 +54,12 @@ func profileCmd(ctx context.Context, args []string, _ io.Reader, stdout, stderr 
 		prof, err := profilebuild.Build(ctx, prj, p.fsys)
 		if err != nil {
 			return fail(err)
+		}
+		// Whoever uses the profile takes its driver settings as known.
+		for _, n := range prj.Notes {
+			if n.Kind == diag.NoteDriverUnset && !quiet {
+				fmt.Fprintf(stderr, "note: %s; the profile gives them as none\n", n.Message)
+			}
 		}
 		data, err := prof.Marshal()
 		if err != nil {

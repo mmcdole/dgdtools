@@ -22,7 +22,8 @@ var ruleSyntaxError = &Rule{
 		"when the parser went on as if it were there. Errors that could be an " +
 		"artifact of a macro the linter cannot see through are not reported: a " +
 		"statement that uses a fragment macro, or, when some #include could not be " +
-		"resolved, an error next to an unknown identifier. After an error that " +
+		"resolved or no include_file is set (the force-included header may define " +
+		"anything), an error next to an unknown identifier. After an error that " +
 		"leaves the file's structure in doubt (unbalanced braces) later errors in " +
 		"the file are dropped as likely consequences.",
 	Default: true, Severity: diag.Error, CompiledOnly: true,
@@ -182,7 +183,8 @@ var ruleIncludeNotFound = &Rule{
 	Explain: "A missing #include is a compile error when the object loads. Only " +
 		"reported when the mudlib is complete (the configured include dirs and " +
 		"force-included header exist); in a partial checkout the target is " +
-		"unknown, not missing. Like a C compiler's fatal \"file not found\", it " +
+		"unknown, not missing, and so is any include when include_dirs is not set " +
+		"(a \"...\" include not found as written is looked for in them too). Like a C compiler's fatal \"file not found\", it " +
 		"stops syntax reporting for the rest of the file.",
 	Default: true, Severity: diag.Error, CrossFile: true, CompiledOnly: true,
 	Run: func(p *Pass) {

@@ -225,6 +225,12 @@ func (l *lib) decideCovers(p string) bool {
 // not to exist: every place the driver would look is covered.
 func (s *Snapshot) includeProvablyMissing(from string, inc pp.Include) bool {
 	l := s.lib
+	if !l.cfg.DriverKnown(config.KeyIncludeDirs) {
+		// Nothing said where the driver looks: the include dirs are
+		// unknown, not none. A "..." include not found as written is
+		// looked for there too (Preproc::do_include).
+		return false
+	}
 	if !l.partial {
 		_, unknown := l.IncludeDirs(l.LibFile(from))
 		return s.ext.complete && !unknown

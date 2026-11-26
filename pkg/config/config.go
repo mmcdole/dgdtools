@@ -109,6 +109,11 @@ type Config struct {
 	// DriverObject is the lib path of the driver object (the driver
 	// config's driver_object), whose functions the driver calls by name.
 	DriverObject string `yaml:"-"`
+	// DriverUnset are the driver settings nothing gave, by the driver
+	// config's names (DriverKeys order). DGD does not start without them,
+	// so such a setting is unknown, not empty: what depends on it is not
+	// reported. Typechecking is unset when Dialect.Typechecking is nil.
+	DriverUnset []string `yaml:"-"`
 
 	// Scope is set by `root: false`: the file is a settings scope, not a
 	// project's root config.
@@ -118,6 +123,22 @@ type Config struct {
 	Dir  string `yaml:"-"`
 	Path string `yaml:"-"`
 }
+
+// The driver settings, by the driver config's names.
+const (
+	KeyIncludeDirs  = "include_dirs"
+	KeyIncludeFile  = "include_file"
+	KeyAutoObject   = "auto_object"
+	KeyDriverObject = "driver_object"
+	KeyTypechecking = "typechecking"
+)
+
+// DriverKeys are the driver settings, in the order they are named.
+var DriverKeys = []string{KeyIncludeDirs, KeyIncludeFile, KeyAutoObject, KeyDriverObject, KeyTypechecking}
+
+// DriverKnown reports whether the driver setting key was given: by the
+// driver: block, the driver config or the profile.
+func (c *Config) DriverKnown(key string) bool { return !slices.Contains(c.DriverUnset, key) }
 
 // DefaultCreate is the function a new object is initialized by when
 // conventions.create does not say.
@@ -397,6 +418,11 @@ func (c *Config) Validate() error {
 	}
 	if c.Scope {
 		return c.validateScope()
+	}
+	if c.Profile != "" && c.DriverConfig != "" {
+		// The profile gives the driver settings, and driver_config would
+		// go unread: a setting is never silently ignored.
+		return fmt.Errorf("profile and driver_config are both set: with a profile, the driver settings are the profile's and driver_config is not read; remove one (a driver: block sets single settings over the profile)")
 	}
 
 	for _, p := range c.Exclude {

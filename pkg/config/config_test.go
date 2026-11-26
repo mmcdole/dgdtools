@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/mmcdole/dgdtools/pkg/diag"
 	"github.com/mmcdole/dgdtools/pkg/profile"
 	"github.com/mmcdole/dgdtools/pkg/vfs"
 )
@@ -178,6 +179,101 @@ func TestDriverBlock(t *testing.T) {
 		assert.Contains(t, err.Error(), "/p/dgdtools.yml: ", text)
 		assert.Contains(t, err.Error(), want, text)
 	}
+}
+
+// A driver setting nothing gives is unknown, not empty, and the project
+// says once which ones are.
+func TestDriverUnset(t *testing.T) {
+	notes := func(prj *Project) []diag.Note {
+		var out []diag.Note
+		for _, n := range prj.Notes {
+			if n.Kind == diag.NoteDriverUnset {
+				out = append(out, n)
+			}
+		}
+		return out
+	}
+	discover := func(m vfs.Mem, opt DiscoverOptions) *Project {
+		t.Helper()
+		prj, err := Discover(m, []string{"/mud/a.c"}, opt)
+		require.NoError(t, err)
+		return prj
+	}
+
+	// root: alone gives none of them.
+	m := vfs.Mem{"/mud/dgdtools.yml": "root: .\n", "/mud/a.c": ""}
+	prj := discover(m, DiscoverOptions{})
+	assert.Equal(t, DriverKeys, prj.Config.DriverUnset)
+	assert.False(t, prj.Config.DriverKnown(KeyIncludeDirs))
+	assert.Equal(t, []diag.Note{{Kind: diag.NoteDriverUnset, Path: "/mud/dgdtools.yml",
+		Message: "driver settings not set: include_dirs, include_file, auto_object, driver_object, typechecking (set driver_config, or a driver: block)"}}, notes(prj))
+
+	// The driver: block gives what it sets; include_dirs: [] is none,
+	// which is known.
+	m["/mud/dgdtools.yml"] = "root: .\ndriver: {include_dirs: [], auto_object: /sys/auto}\n"
+	prj = discover(m, DiscoverOptions{})
+	assert.Equal(t, []string{KeyIncludeFile, KeyDriverObject, KeyTypechecking}, prj.Config.DriverUnset)
+	assert.True(t, prj.Config.DriverKnown(KeyIncludeDirs))
+	require.Len(t, notes(prj), 1)
+	assert.Equal(t, "driver settings not set: include_file, driver_object, typechecking (set driver_config, or a driver: block)", notes(prj)[0].Message)
+
+	// The driver config gives what it has; ({ }) is no include dirs.
+	m["/mud/dgdtools.yml"] = "root: .\ndriver_config: mud.dgd\n"
+	m["/mud/mud.dgd"] = driverCfg
+	prj = discover(m, DiscoverOptions{})
+	assert.Equal(t, []string{KeyDriverObject}, prj.Config.DriverUnset)
+	m["/mud/mud.dgd"] = driverCfg + "driver_object = \"/sys/driver\";\n"
+	prj = discover(m, DiscoverOptions{})
+	assert.Empty(t, prj.Config.DriverUnset)
+	assert.Empty(t, notes(prj))
+	m["/mud/mud.dgd"] = "include_dirs = ({ });\n"
+	prj = discover(m, DiscoverOptions{})
+	assert.True(t, prj.Config.DriverKnown(KeyIncludeDirs))
+	assert.Empty(t, prj.Config.IncludeDirs)
+
+	// A driver config the formatter cannot read gives nothing.
+	m["/mud/dgdtools.yml"] = "root: .\ndriver_config: nope.dgd\n"
+	prj = discover(m, DiscoverOptions{SettingsOnly: true})
+	assert.Equal(t, DriverKeys, prj.Config.DriverUnset)
+
+	// A profile gives all but a typechecking it does not have.
+	m = vfs.Mem{
+		"/mud/dgdtools.yml": "profile: mud.profile\nlib_path: /usr/ann\n",
+		"/mud/mud.profile": "dgdtools-profile 2\n" + `{"name":"mud","dialect":{"driver":"dgd"},` +
+			`"include_dirs":["/include"],"auto_objects":["/kernel/auto"],"conventions":{}}` + "\n",
+		"/mud/a.c": "",
+	}
+	prj = discover(m, DiscoverOptions{})
+	assert.Equal(t, []string{KeyTypechecking}, prj.Config.DriverUnset)
+	require.Len(t, notes(prj), 1)
+	assert.Equal(t, "driver settings not set: typechecking (set them in a driver: block)", notes(prj)[0].Message)
+
+	// Without a mudlib there is nothing they are needed for.
+	prj = discover(vfs.Mem{"/mud/a.c": ""}, DiscoverOptions{})
+	assert.Empty(t, notes(prj))
+}
+
+// A profile gives the driver settings, so driver_config beside it would
+// go unread: in one file that is an error, and a profile named by the
+// caller over a file's driver_config is a note.
+func TestProfileAndDriverConfig(t *testing.T) {
+	const prof = "dgdtools-profile 2\n" + `{"name":"mud","dialect":{"driver":"dgd","typechecking":0},` +
+		`"include_dirs":["/include"],"include_file":"/include/std.h","auto_objects":["/kernel/auto"],"driver_object":"/kernel/driver","conventions":{}}` + "\n"
+	m := vfs.Mem{
+		"/w/dgdtools.yml": "profile: mud.profile\ndriver_config: nowhere.dgd\n",
+		"/w/mud.profile":  prof,
+		"/w/a.c":          "",
+	}
+	_, err := Discover(m, []string{"/w/a.c"}, DiscoverOptions{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "/w/dgdtools.yml: profile and driver_config are both set")
+
+	m["/w/dgdtools.yml"] = "root: .\ndriver_config: nowhere.dgd\n"
+	prj, err := Discover(m, []string{"/w/a.c"}, DiscoverOptions{Profile: "/w/mud.profile"})
+	require.NoError(t, err)
+	assert.Contains(t, prj.Notes, diag.Note{Kind: diag.NoteDriverConfigIgnored, Path: "nowhere.dgd",
+		Message: "driver_config nowhere.dgd not read: the driver settings are profile mud's"})
+	assert.Empty(t, prj.Config.DriverUnset)
 }
 
 func TestRuleSettings(t *testing.T) {

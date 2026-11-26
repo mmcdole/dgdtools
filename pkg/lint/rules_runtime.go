@@ -34,7 +34,8 @@ var ruleCallableNotFound = &Rule{
 	Explain: "In DGD a call_other to a function that does not exist silently " +
 		"returns nil. Reported only when the receiver is known (a string constant, " +
 		"a macro that evaluates to one, or this_object()) and the target's whole " +
-		"inherit chain was resolved and parsed; for a file that other objects " +
+		"inherit chain was resolved and parsed, and auto_object is set (the auto " +
+		"object may have the function); for a file that other objects " +
 		"inherit or #include, the function is also looked for in those users.",
 	Default: true, Severity: diag.Error, CrossFile: true, CompiledOnly: true,
 	Run: func(p *Pass) {
@@ -115,7 +116,8 @@ var rulePrivateCallback = &Rule{
 		"object can call. Reported only when the receiver is this_object() and the " +
 		"name is a string constant, and when the name is private in the object's " +
 		"whole inherit chain, as known in full, and in every object that inherits " +
-		"or includes the file; not in a partial checkout or in the auto object. " +
+		"or includes the file; not in a partial checkout or in the auto object, " +
+		"nor when auto_object is not set. " +
 		"The ->fn and call_other forms are static-crossobj's. There is no fix: " +
 		"making the function static is what is usually meant, but a function that " +
 		"is no longer private redefines and clashes with the functions of that " +
